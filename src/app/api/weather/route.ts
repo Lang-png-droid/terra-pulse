@@ -63,7 +63,7 @@ export async function GET() {
   }
 
   // Normalize cyclones (from RainViewer storm data or mock)
-  let cyclones = { type: 'FeatureCollection', features: [] as any[], metadata: { source: 'None', fetchedAt: new Date().toISOString(), count: 0 } };
+  let cyclones: any;
   if (cyclonesData?.storms) {
     cyclones = normalizeCyclones(cyclonesData.storms);
   } else if (cyclonesData?.host) {

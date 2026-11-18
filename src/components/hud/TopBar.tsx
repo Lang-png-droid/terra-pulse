@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { filterPointFeatures, getFeatureLngLat } from '@/types/geo';
 import { DisasterFeature, NewsArticle, DisasterType } from '@/types/disaster';
 import { haversineDistance, formatDistance } from '@/lib/geoMath';
 
@@ -49,19 +50,18 @@ export function TopBar({
   // Update nearby disasters when user location changes
   useEffect(() => {
     if (userLocation && activeDisasters.length > 0) {
-      const nearby = activeDisasters
+      const pointFeatures = filterPointFeatures(activeDisasters);
+      const nearby = pointFeatures
         .map((d) => {
-          const coords = d.geometry.coordinates;
-          if (d.geometry.type === 'Point' && Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
-            const [lng, lat] = coords as [number, number];
-            const distance = haversineDistance(userLocation.lat, userLocation.lng, lat, lng);
-            return { ...d, properties: { ...d.properties, distanceKm: distance } };
-          }
-          return d;
+          const lngLat = getFeatureLngLat(d);
+          if (!lngLat) return d;
+          const [lng, lat] = lngLat;
+          const distance = haversineDistance(userLocation.lat, userLocation.lng, lat, lng);
+          return { ...d, properties: { ...d.properties, distanceKm: distance } };
         })
         .filter((d) => (d.properties.distanceKm || Infinity) <= 200)
         .sort((a, b) => (a.properties.distanceKm || Infinity) - (b.properties.distanceKm || Infinity))
-        .slice(0, 5);
+        .slice(0, 5) as DisasterFeature[];
       setNearbyDisasters(nearby);
     }
   }, [userLocation, activeDisasters]);

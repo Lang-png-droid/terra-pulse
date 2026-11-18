@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { getDisasterFeatureLngLat, isDisasterPointFeature } from '@/types/geo';
 import { DisasterFeature, DisasterType } from '@/types/disaster';
 import { haversineDistance, formatDistance, formatDuration, tsunamiWaveSpeed, tsunamiTravelTimeMinutes } from '@/lib/geoMath';
 import { simulateTsunami, formatEta } from '@/components/map/TsunamiSimulation';
@@ -57,16 +58,14 @@ export function EventBottomSheet({
   if (!feature) return null;
 
   const props = feature.properties;
-  const coords = feature.geometry.coordinates;
-  const [lng, lat] = (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number')
-    ? coords as [number, number]
-    : [0, 0];
+  const lngLat = getDisasterFeatureLngLat(feature);
+  const [lng, lat] = lngLat ?? [0, 0];
 
   // Calculate distance from user
   let distanceStr = '';
-  if (userLocation && feature.geometry.type === 'Point' && Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
-    const dist = haversineDistance(userLocation.lat, userLocation.lng, lat, lng);
-    distanceStr = formatDistance(dist);
+  if (userLocation && lngLat) {
+    const distance = haversineDistance(userLocation.lat, userLocation.lng, lat, lng);
+    distanceStr = formatDistance(distance);
   }
 
   const getIcon = (type: DisasterType) => {

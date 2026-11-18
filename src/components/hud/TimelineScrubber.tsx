@@ -4,7 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { TimelineState } from '@/types/disaster';
 
 interface TimelineScrubberProps {
-  state: TimelineState;
+  currentTime: number;
+  startTime: number;
+  endTime: number;
+  stepHours: number;
+  isPlaying: boolean;
+  speed: number;
   onTimeChange: (time: number) => void;
   onPlayPause: () => void;
   onSpeedChange: (speed: number) => void;
@@ -14,7 +19,12 @@ interface TimelineScrubberProps {
 }
 
 export function TimelineScrubber({
-  state,
+  currentTime,
+  startTime,
+  endTime,
+  stepHours,
+  isPlaying,
+  speed,
   onTimeChange,
   onPlayPause,
   onSpeedChange,
@@ -22,27 +32,19 @@ export function TimelineScrubber({
   hasCycloneData,
   hasTsunamiData,
 }: TimelineScrubberProps) {
-  const [localTime, setLocalTime] = useState(state.currentTime);
+  const [localTime, setLocalTime] = useState(currentTime);
   const [dragging, setDragging] = useState(false);
   const rafRef = useRef<number | null>(null);
   const lastFrameRef = useRef<number>(0);
-  const animationTimeRef = useRef<number>(state.currentTime);
-  const lastSyncRef = useRef<number>(0);
+  const animationTimeRef = useRef<number>(currentTime);
 
-  // Sync with external state (when not dragging or animating)
+  // Animation loop - runs on RAF, updates local ref for smooth display
+  // Does NOT sync to parent during playback to avoid render loop
   useEffect(() => {
-    if (!dragging && !state.isPlaying) {
-      setLocalTime(state.currentTime);
-      animationTimeRef.current = state.currentTime;
-    }
-  }, [state.currentTime, dragging, state.isPlaying]);
-
-  // Animation loop - runs on RAF but only syncs to parent periodically
-  useEffect(() => {
-    if (!state.isPlaying) return;
+    if (!isPlaying) return;
 
     // Initialize animation time
-    animationTimeRef.current = state.currentTime;
+    animationTimeRef.current = currentTime;
     lastFrameRef.current = 0;
 
     const animate = (timestamp: number) => {
@@ -52,28 +54,18 @@ export function TimelineScrubber({
 
       // Calculate time advance based on speed
       // 1x = 1 hour per second, so 3600000 ms per second
-      const timeAdvance = (delta / 1000) * state.speed * 3600000; // ms
+      const timeAdvance = (delta / 1000) * speed * 3600000; // ms
 
       animationTimeRef.current += timeAdvance;
 
       // Check if we've reached the end
-      if (animationTimeRef.current >= state.endTime) {
-        animationTimeRef.current = state.endTime;
-        onTimeChange(state.endTime);
+      if (animationTimeRef.current >= endTime) {
+        animationTimeRef.current = endTime;
+        onTimeChange(endTime);
         // Stop animation
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
         return;
-      }
-
-      // Update local UI state immediately for smooth animation
-      setLocalTime(animationTimeRef.current);
-
-      // Throttle parent sync to max 5fps (200ms) to avoid render storms
-      const now = performance.now();
-      if (now - lastSyncRef.current >= 200) {
-        onTimeChange(animationTimeRef.current);
-        lastSyncRef.current = now;
       }
 
       rafRef.current = requestAnimationFrame(animate);
@@ -83,7 +75,7 @@ export function TimelineScrubber({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [state.isPlaying, state.speed, state.endTime, onTimeChange]);
+  }, [isPlaying, speed, endTime, onTimeChange, currentTime]);
 
   // Sync to parent when dragging stops
   const handleMouseUp = useCallback(() => {
@@ -132,10 +124,10 @@ export function TimelineScrubber({
     const scrubberRect = document.querySelector('.timeline-scrubber')?.getBoundingClientRect();
     if (!scrubberRect) return;
     const progress = Math.max(0, Math.min(1, (clientX - scrubberRect.left) / scrubberRect.width));
-    const newTime = state.startTime + progress * (state.endTime - state.startTime);
+    const newTime = startTime + progress * (endTime - startTime);
     setLocalTime(newTime);
     animationTimeRef.current = newTime;
-  }, [state.startTime, state.endTime]);
+  }, [startTime, endTime]);
 
   // Mouse/touch event listeners
   useEffect(() => {
@@ -155,8 +147,9 @@ export function TimelineScrubber({
   if (!hasCycloneData && !hasTsunamiData) {
     return null; // Don't show if no time-based data
   }
-
-  const progress = (localTime - state.startTime) / (state.endTime - state.startTime);
+  // Use animationTimeRef during playback for smooth visual updates, otherwise localTime
+  const displayTime = isPlaying ? animationTimeRef.current : localTime;
+  const progress = (displayTime - startTime) / (endTime - startTime);
   const clampedProgress = Math.max(0, Math.min(1, progress));
 
   return (
@@ -169,19 +162,19 @@ export function TimelineScrubber({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">
-              {formatFullTime(state.startTime)}
+              {formatFullTime(startTime)}
             </span>
             <span className="text-sm font-medium text-white whitespace-nowrap" id="current-time-display">
-              {formatFullTime(localTime)}
+              {formatFullTime(displayTime)}
             </span>
             <span className="text-xs font-mono text-zinc-400 whitespace-nowrap">
-              {formatFullTime(state.endTime)}
+              {formatFullTime(endTime)}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">{formatTime(localTime)}</span>
+            <span className="text-xs text-zinc-500">{formatTime(displayTime)}</span>
             <select
-              value={state.speed}
+              value={speed}
               onChange={(e) => onSpeedChange(Number(e.target.value))}
               className="bg-zinc-800 border-zinc-700 text-white text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
               aria-label="Playback speed"
@@ -194,11 +187,11 @@ export function TimelineScrubber({
             <button
               onClick={onPlayPause}
               className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors touch-target"
-              aria-label={state.isPlaying ? 'Pause' : 'Play'}
-              aria-pressed={state.isPlaying}
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+              aria-pressed={isPlaying}
             >
               <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                {state.isPlaying ? (
+                {isPlaying ? (
                   <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                 ) : (
                   <path d="M8 5v14l11-7z" />

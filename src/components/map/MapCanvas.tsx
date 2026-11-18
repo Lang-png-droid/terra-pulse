@@ -179,15 +179,46 @@ export function MapCanvas({
     mapLoaded,
   ]);
 
-  // Sync map viewport with props
+  // Sync map viewport with props (only for external navigation, not user panning)
+  // Use a threshold to avoid infinite loop from map.on('move') -> onViewportChange -> jumpTo
   useEffect(() => {
     if (mapRef.current && mapLoaded) {
-      mapRef.current.jumpTo({
-        center: [viewport.longitude, viewport.latitude],
-        zoom: viewport.zoom,
-        bearing: viewport.bearing,
-        pitch: viewport.pitch,
-      });
+      const map = mapRef.current;
+      const center = map.getCenter();
+      const currentViewport = {
+        latitude: center.lat,
+        longitude: center.lng,
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      };
+
+      // Only jump if viewport changed significantly (external navigation)
+      const latDiff = Math.abs(currentViewport.latitude - viewport.latitude);
+      const lngDiff = Math.abs(currentViewport.longitude - viewport.longitude);
+      const zoomDiff = Math.abs(currentViewport.zoom - viewport.zoom);
+      const bearingDiff = Math.abs(currentViewport.bearing - viewport.bearing);
+      const pitchDiff = Math.abs(currentViewport.pitch - viewport.pitch);
+
+      const THRESHOLD = 0.0001; // ~10 meters
+      const ZOOM_THRESHOLD = 0.01;
+      const BEARING_THRESHOLD = 0.1;
+      const PITCH_THRESHOLD = 0.1;
+
+      if (
+        latDiff > THRESHOLD ||
+        lngDiff > THRESHOLD ||
+        zoomDiff > ZOOM_THRESHOLD ||
+        bearingDiff > BEARING_THRESHOLD ||
+        pitchDiff > PITCH_THRESHOLD
+      ) {
+        map.jumpTo({
+          center: [viewport.longitude, viewport.latitude],
+          zoom: viewport.zoom,
+          bearing: viewport.bearing,
+          pitch: viewport.pitch,
+        });
+      }
     }
   }, [viewport, mapLoaded]);
 

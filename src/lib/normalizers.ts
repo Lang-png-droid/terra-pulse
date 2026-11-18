@@ -14,7 +14,7 @@ import {
   FloodFeature,
   NewsArticle,
 } from '@/types/disaster';
-import { haversineDistance } from './geoMath';
+import { haversineDistance, generateTsunamiRings } from './geoMath';
 
 // Re-export NewsArticle for API routes
 export type { NewsArticle } from '@/types/disaster';
@@ -403,7 +403,6 @@ export function generateTsunamiSimulation(params: TsunamiSimulationParams): Disa
   }
 
   const features: TsunamiFeature[] = [];
-  const { generateTsunamiRings } = require('./geoMath');
   const rings = generateTsunamiRings(maxRadiusKm);
 
   for (const ring of rings) {

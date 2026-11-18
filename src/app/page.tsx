@@ -268,7 +268,12 @@ export default function HomePage() {
 
       {/* Timeline Scrubber */}
       <TimelineScrubber
-        state={timelineState}
+        currentTime={timelineState.currentTime}
+        startTime={timelineState.startTime}
+        endTime={timelineState.endTime}
+        stepHours={timelineState.stepHours}
+        isPlaying={timelineState.isPlaying}
+        speed={timelineState.speed}
         onTimeChange={handleTimeChange}
         onPlayPause={handlePlayPause}
         onSpeedChange={handleSpeedChange}
