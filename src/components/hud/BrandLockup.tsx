@@ -15,7 +15,7 @@ const MODE_TABS: Array<{ id: string; panel: string; label: string; mode: ViewMod
 export function BrandLockup({ mode, onModeChange }: BrandLockupProps) {
   return (
     <div
-      className="fixed bottom-4 left-4 safe-left z-40 pointer-events-auto select-none hidden md:block"
+      className="fixed bottom-[105px] left-4 safe-left z-40 pointer-events-auto select-none hidden md:block"
       aria-label="TerraPulse brand"
     >
       <div className="flex flex-col items-start gap-2">
@@ -41,7 +41,7 @@ export function BrandLockup({ mode, onModeChange }: BrandLockupProps) {
             {/* Center dot */}
             <circle cx="12" cy="12" r="2" fill="currentColor" />
             {/* Sweep line */}
-            <line x1="12" y1="12" x2="12" y2="2" className="animate-radar-sweep" strokeWidth="2" />
+            <line x1="12" y1="12" x2="12" y2="2" strokeWidth="2" />
             {/* Cardinal markers */}
             <line x1="12" y1="10" x2="12" y2="8" opacity="0.4" />
             <line x1="12" y1="14" x2="12" y2="16" opacity="0.4" />
@@ -66,10 +66,10 @@ export function BrandLockup({ mode, onModeChange }: BrandLockupProps) {
                 aria-selected={mode === tab.mode}
                 aria-controls={tab.panel}
                 onClick={() => onModeChange(tab.mode)}
-                className={`tp-label-sm tp-touch px-3 rounded-none border-b-2 transition-all ${
+                className={`tp-label-sm tp-touch border px-3 transition-colors ${
                   mode === tab.mode
-                    ? 'border-tp-cyan text-tp-cyan'
-                    : 'border-transparent text-tp-muted hover:text-tp-text'
+                    ? 'border-white bg-white text-black'
+                    : 'border-[#222222] text-zinc-500 hover:border-white hover:text-white'
                 }`}
                 title={tab.title}
               >

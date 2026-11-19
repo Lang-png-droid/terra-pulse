@@ -239,9 +239,14 @@ export default function HomePage() {
 
   // Tsunami polygons for map (pre-positioned at epicenter)
   const tsunamiPolygons = showTsunami && tsunamiSimulation ? tsunamiSimulation.polygons : [];
-  // Check if we have time-based data
-  const hasCycloneData = cyclones.length > 0;
-  const hasTsunamiData = showTsunami && tsunamiSimulation !== null;
+
+  // Bottom-strip telemetry cells
+  const timelineMetrics = {
+    quakes: earthquakes.length,
+    maxMag: Math.max(0, ...earthquakes.map((f) => f.properties.magnitude ?? 0)),
+    hotspots: hotspots.length,
+    cyclones: cyclones.length,
+  };
 
   return (
     <div className="relative w-full h-[100dvh] bg-tp-bg overflow-hidden">
@@ -294,7 +299,7 @@ export default function HomePage() {
           isMobile={isMobile}
         />
 
-        {/* Timeline Bar (Bottom Center) */}
+        {/* Bottom telemetry strip (full-bleed, docked) */}
         <TimelineBar
           currentTime={timelineState.currentTime}
           startTime={timelineState.startTime}
@@ -305,9 +310,7 @@ export default function HomePage() {
           onTimeChange={handleTimeChange}
           onPlayPause={handlePlayPause}
           onSpeedChange={handleSpeedChange}
-          isMobile={isMobile}
-          hasCycloneData={hasCycloneData}
-          hasTsunamiData={hasTsunamiData}
+          metrics={timelineMetrics}
         />
       </div>
 
@@ -328,7 +331,7 @@ export default function HomePage() {
       {/* News toggle (mobile only — BrandLockup is desktop-only) */}
       <button
         onClick={() => handleModeChange(viewMode === 'BERITA' ? 'PETA' : 'BERITA')}
-        className="fixed top-14 right-4 z-40 md:hidden tp-panel rounded-full shadow-lg tp-label text-tp-cyan flex items-center gap-2 px-3 min-h-[44px]"
+        className="fixed top-14 right-4 z-40 md:hidden tp-panel tp-label flex min-h-[44px] items-center gap-2 px-3 text-tp-cyan"
         aria-label={viewMode === 'BERITA' ? 'Tutup panel berita' : 'Buka panel berita'}
         aria-expanded={viewMode === 'BERITA'}
       >
@@ -341,9 +344,9 @@ export default function HomePage() {
 
       {/* Loading indicator */}
       {loading && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 tp-panel-strong rounded-full px-4 py-2 tp-body text-tp-text flex items-center gap-2">
-          <span className="animate-spin text-tp-cyan">⟳</span>
-          Memuat data bencana...
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 tp-panel-strong px-4 py-2 tp-label flex items-center gap-2 text-tp-text">
+          <span className="animate-spin text-tp-cyan" aria-hidden="true">⟳</span>
+          <span className="tp-label text-tp-text">Memuat data bencana...</span>
         </div>
       )}
     </div>

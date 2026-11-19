@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { LayerVisibility, DisasterType } from '@/types/disaster';
-import { PanelCorners } from './PanelCorners';
 
 interface LayerPanelProps {
   visibility: LayerVisibility;
@@ -21,18 +20,15 @@ const LAYER_ORDER: Array<keyof LayerVisibility> = [
   'floods',
 ];
 
-const LAYER_DISPLAY: Record<
-  keyof LayerVisibility,
-  { label: string; dotClass: string; accent: string }
-> = {
-  earthquakes: { label: 'GEMPA BUMI', dotClass: 'tp-dot-earthquake', accent: '#22D3EE' },
-  hotspots: { label: 'TITIK API', dotClass: 'tp-dot-hotspot', accent: '#EAB308' },
-  volcanoes: { label: 'GUNUNG API', dotClass: 'tp-dot-volcano', accent: '#F97316' },
-  cyclones: { label: 'SIKLON', dotClass: 'tp-dot-cyclone', accent: '#A855F7' },
-  tsunamiRings: { label: 'TSUNAMI', dotClass: 'tp-dot-tsunami', accent: '#A855F7' },
-  rainRadar: { label: 'HUJAN', dotClass: 'tp-dot-rain', accent: '#22D3EE' },
-  floods: { label: 'BANJIR', dotClass: 'tp-dot-flood', accent: '#22D3EE' },
-  windParticles: { label: 'ANGIN', dotClass: 'tp-dot-cyclone', accent: '#A855F7' },
+const LAYER_DISPLAY: Record<keyof LayerVisibility, { label: string; dotClass: string }> = {
+  earthquakes: { label: 'GEMPA BUMI', dotClass: 'tp-dot-earthquake' },
+  hotspots: { label: 'TITIK API', dotClass: 'tp-dot-hotspot' },
+  volcanoes: { label: 'GUNUNG API', dotClass: 'tp-dot-volcano' },
+  cyclones: { label: 'SIKLON', dotClass: 'tp-dot-cyclone' },
+  tsunamiRings: { label: 'TSUNAMI', dotClass: 'tp-dot-tsunami' },
+  rainRadar: { label: 'HUJAN', dotClass: 'tp-dot-rain' },
+  floods: { label: 'BANJIR', dotClass: 'tp-dot-flood' },
+  windParticles: { label: 'ANGIN', dotClass: 'tp-dot-cyclone' },
 };
 
 export function LayerPanel({ visibility, onVisibilityChange, isMobile, disasterCounts }: LayerPanelProps) {
@@ -46,41 +42,25 @@ export function LayerPanel({ visibility, onVisibilityChange, isMobile, disasterC
   const renderLayerRow = (layer: keyof LayerVisibility) => {
     const count = disasterCounts[layer as DisasterType] || 0;
     const isActive = visibility[layer];
-    const { label, dotClass, accent } = LAYER_DISPLAY[layer];
+    const { label, dotClass } = LAYER_DISPLAY[layer];
 
-    // 28px visible row inside a 44px hit area (C7 keeps passing).
+    // 44px hit area, 1px grid rule between rows, square indicator.
     return (
       <button
         key={layer}
         onClick={() => toggleLayer(layer)}
-        className="group flex w-full min-h-[44px] items-center text-left"
+        className="group flex min-h-[44px] w-full items-center gap-2 border-b border-[#1A1A1A] pl-2 pr-2 text-left transition-colors hover:bg-[#111111]"
         aria-pressed={isActive}
       >
-        <span className="relative flex h-7 w-full items-center gap-2 pl-2 pr-1.5 transition-colors group-hover:bg-white/[0.04]">
-          <span
-            aria-hidden="true"
-            className="absolute left-0 top-1/2 h-3.5 w-[2px] -translate-y-1/2"
-            style={{
-              background: isActive ? accent : 'rgba(255,255,255,0.08)',
-              boxShadow: isActive ? `0 0 8px ${accent}` : 'none',
-            }}
-          />
-          <span
-            className={dotClass}
-            style={{ width: '5px', height: '5px' }}
-            aria-hidden="true"
-          />
-          <span
-            className={`truncate font-mono text-[10px] uppercase tracking-[0.18em] ${
-              isActive ? 'text-tp-text' : 'text-zinc-500'
-            }`}
-          >
-            {label}
-          </span>
-          <span className="ml-auto flex-shrink-0 font-mono text-[10px] tabular-nums text-zinc-500">
-            {count}
-          </span>
+        <span className={`${dotClass} ${isActive ? '' : 'opacity-40'}`} aria-hidden="true" />
+        <span
+          className={`truncate font-mono text-[10px] uppercase tracking-[0.18em] ${
+            isActive ? 'text-white' : 'text-zinc-500'
+          }`}
+        >
+          {label}
         </span>
+        <span className="ml-auto flex-shrink-0 font-mono text-[10px] tabular-nums text-zinc-500">{count}</span>
       </button>
     );
   };
@@ -95,13 +75,13 @@ export function LayerPanel({ visibility, onVisibilityChange, isMobile, disasterC
         {!mobileOpen && (
           <button
             onClick={() => setMobileOpen(true)}
-            className="fixed top-14 left-4 z-40 flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-[2px] border border-white/[0.09] bg-[#050507]/75 px-3 py-2 backdrop-blur-md tp-touch"
+            className="tp-panel fixed top-14 left-4 z-40 flex min-h-[44px] min-w-[44px] items-center gap-2 px-3 py-2"
             aria-label="Buka kontrol layer"
             aria-expanded="false"
           >
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-tp-cyan">LAYER</span>
             <span className="font-mono text-[10px] tabular-nums text-zinc-500">{activeCount}</span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-tp-muted" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-white" aria-hidden="true">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
@@ -112,31 +92,28 @@ export function LayerPanel({ visibility, onVisibilityChange, isMobile, disasterC
         {mobileOpen && (
           <>
             <div
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/70"
               onClick={() => setMobileOpen(false)}
               aria-hidden="true"
             />
-            <div className="tp-panel-strong fixed bottom-0 left-0 top-0 z-50 flex w-[210px] max-w-[85vw] animate-slide-in flex-col border-r border-white/[0.09]">
-              <PanelCorners />
+            <div className="tp-panel-strong fixed bottom-0 left-0 top-0 z-50 flex w-[210px] max-w-[85vw] animate-slide-in flex-col border-y-0 border-l-0">
               <div className="flex flex-col h-full">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-white/[0.09] px-3 py-2">
-                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500">
-                    LAYER KONTROL
-                  </span>
+                <div className="flex items-center justify-between border-b border-[#222222] px-3">
+                  <span className="tp-micro">LAYER / AKTIF</span>
                   <button
                     onClick={() => setMobileOpen(false)}
-                    className="tp-touch rounded-[2px] transition-colors hover:bg-white/[0.06]"
+                    className="tp-touch text-white transition-colors hover:bg-white/10"
                     aria-label="Tutup panel layer"
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-tp-muted" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                       <line x1="18" y1="6" x2="6" y2="18" />
                       <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                   </button>
                 </div>
                 {/* Layer list */}
-                <div className="flex-1 overflow-y-auto p-2" style={{ maxHeight: '55vh' }}>
+                <div className="flex-1 overflow-y-auto" style={{ maxHeight: '55vh' }}>
                   {LAYER_ORDER.map(renderLayerRow)}
                 </div>
               </div>
@@ -157,28 +134,25 @@ export function LayerPanel({ visibility, onVisibilityChange, isMobile, disasterC
       }`}
       style={{ maxHeight: '55vh' }}
     >
-      <PanelCorners />
       {expanded ? (
         <div className="flex flex-col h-full">
           {/* Header with collapse button */}
-          <div className="flex items-center justify-between border-b border-white/[0.09] px-3 py-1.5">
-            <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500">
-              LAYER KONTROL
-            </span>
+          <div className="flex items-center justify-between border-b border-[#222222] px-3">
+            <span className="tp-micro">LAYER / AKTIF</span>
             <button
               onClick={() => setExpanded(false)}
-              className="tp-touch rounded-[2px] transition-colors hover:bg-white/[0.06]"
+              className="tp-touch text-white transition-colors hover:bg-white/10"
               aria-label="Collapse panel"
               aria-expanded={true}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-tp-muted" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
           </div>
 
           {/* Layer list */}
-          <div className="flex-1 overflow-y-auto p-2" style={{ maxHeight: '55vh' }}>
+          <div className="flex-1 overflow-y-auto" style={{ maxHeight: '55vh' }}>
             {LAYER_ORDER.map(renderLayerRow)}
           </div>
         </div>
@@ -186,11 +160,11 @@ export function LayerPanel({ visibility, onVisibilityChange, isMobile, disasterC
         <div className="flex flex-col items-center py-1">
           <button
             onClick={() => setExpanded(true)}
-            className="tp-touch rounded-[2px] transition-colors hover:bg-white/[0.06]"
+            className="tp-touch text-white transition-colors hover:bg-white/10"
             aria-label="Expand panel"
             aria-expanded={false}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-tp-muted" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>

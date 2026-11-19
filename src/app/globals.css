@@ -6,24 +6,22 @@
 
 @layer base {
   :root {
-    /* TerraPulse Design System Colors */
-    --tp-bg-primary: #050507;
-    --tp-bg-panel: #09090B;
-    --tp-bg-panel-alpha: #09090BB3;
-    --tp-border-subtle: rgba(255,255,255,0.08);
-    --tp-border-active: rgba(34,211,238,0.4);
-    --tp-accent-cyan: #22D3EE;
-    --tp-accent-violet: #A855F7;
-    --tp-accent-cyan-glow: rgba(34,211,238,0.6);
-    --tp-accent-violet-glow: rgba(168,85,247,0.6);
-    --tp-status-critical: #EF4444;
-    --tp-status-high: #F97316;
-    --tp-status-watch: #EAB308;
-    --tp-status-normal: #22C55E;
-    --tp-text-primary: #F8FAFC;
+    /* TerraPulse Design System Colors — flat black grid, no glow, no blur */
+    --tp-bg-primary: #000000;
+    --tp-bg-panel: #0A0A0A;
+    --tp-bg-surface: #111111;
+    --tp-border-subtle: #222222;
+    --tp-border-hairline: #1A1A1A;
+    --tp-border-active: #38BDF8;
+    --tp-accent-cyan: #38BDF8;
+    --tp-accent-white: #FFFFFF;
+    --tp-status-critical: #FF4D2A;
+    --tp-status-high: #FF4D2A;
+    --tp-status-watch: #F59E0B;
+    --tp-status-normal: #71717A;
+    --tp-text-primary: #FFFFFF;
     --tp-text-muted: #71717A;
     --tp-text-dim: #3F3F46;
-
     /* Legacy shadcn compat */
     --background: 5 5% 3%;
     --foreground: 240 10% 97%;
@@ -59,7 +57,8 @@
     @apply bg-tp-bg;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-zinc-700 rounded-full;
+    @apply bg-zinc-700;
+    border-radius: 0;
   }
   ::-webkit-scrollbar-thumb:hover {
     @apply bg-zinc-600;
@@ -70,12 +69,12 @@
 
   /* Focus visible for accessibility */
   *:focus-visible {
-    @apply outline-none ring-2 ring-tp-cyan ring-offset-2 ring-offset-tp-bg;
+    @apply outline-none ring-2 ring-white ring-offset-2 ring-offset-black;
   }
 
   /* Selection */
   ::selection {
-    @apply bg-tp-cyan/30 text-white;
+    @apply bg-white/25 text-black;
   }
 
   /* Font utilities */
@@ -88,45 +87,39 @@
 }
 
 @layer components {
-  /* Hairline panel shells: 2px radius, #050507 at 75%, 1px 9% white border, no blur blob. */
+  /* Flat black technical surfaces: 1px grid border, square corners, no blur, no shadow. */
   .tp-panel {
-    @apply bg-[#050507]/75 backdrop-blur-md border border-white/[0.09];
-    border-radius: 2px;
+    @apply bg-black border border-[#222222];
+    border-radius: 0;
   }
   .tp-panel-strong {
-    @apply bg-[#050507]/75 backdrop-blur-md border border-white/[0.09];
-    border-radius: 2px;
+    @apply bg-[#0A0A0A] border border-[#222222];
+    border-radius: 0;
   }
 
-  /* Hairline HUD type scale: 9px micro labels, 2xl primary metrics. */
+  /* Swiss dot-matrix type scale. */
   .tp-micro {
-    @apply font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500;
+    @apply font-mono text-[9px] uppercase tracking-[0.2em] text-zinc-500;
   }
   .tp-metric {
-    @apply font-geo text-2xl font-semibold tracking-tight tabular-nums text-tp-text;
+    @apply font-geo text-xl font-medium tracking-tight tabular-nums text-white;
   }
   /* One-shot 150ms alert flash on the status bar (re-triggered by remount). */
   .tp-pulse-line {
     animation: tp-pulse-line 150ms ease-out 1;
   }
 
-  /* Telemetry label: uppercase monospace, tracking-widest, 10-11px */
+  /* Telemetry label: uppercase monospace micro-caps. */
   .tp-label {
-    @apply font-mono text-[10px] uppercase tracking-widest text-tp-muted;
+    @apply font-mono text-[10px] uppercase tracking-[0.18em] text-tp-muted;
   }
   .tp-label-sm {
-    @apply font-mono text-[11px] uppercase tracking-widest text-tp-muted;
+    @apply font-mono text-[11px] uppercase tracking-[0.18em] text-tp-muted;
   }
 
   /* Data values: geometric sans, tabular-nums */
   .tp-value {
     @apply font-geo tabular-nums text-tp-text;
-  }
-  .tp-value-lg {
-    @apply font-geo tabular-nums text-lg font-semibold text-tp-text;
-  }
-  .tp-value-xl {
-    @apply font-geo tabular-nums text-xl font-bold text-tp-text;
   }
   /* Compact title: geometric sans, medium weight */
   .tp-title {
@@ -137,66 +130,61 @@
     @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
   }
 
-  /* Glowing indicator dot */
+  /* Square 6px status indicator — no glow. */
   .tp-dot {
-    @apply w-2 h-2 rounded-full;
+    @apply w-[6px] h-[6px] shrink-0 rounded-none;
   }
   .tp-dot-active {
-    @apply tp-dot bg-tp-cyan shadow-[0_0_6px_#22D3EE];
+    @apply tp-dot bg-tp-cyan;
   }
   .tp-dot-inactive {
     @apply tp-dot bg-tp-dim;
   }
 
-  /* Disaster-specific dot colors */
+  /* Disaster-specific indicator colors */
   .tp-dot-earthquake {
-    @apply tp-dot bg-tp-cyan shadow-[0_0_8px_#22D3EE];
+    @apply tp-dot bg-tp-quake;
   }
   .tp-dot-hotspot {
-    @apply tp-dot bg-tp-watch shadow-[0_0_8px_#EAB308];
+    @apply tp-dot bg-tp-fire;
   }
   .tp-dot-volcano {
-    @apply tp-dot bg-tp-high shadow-[0_0_8px_#F97316];
+    @apply tp-dot bg-tp-quake;
   }
   .tp-dot-volcano-critical {
-    @apply tp-dot bg-tp-critical shadow-[0_0_8px_#EF4444];
+    @apply tp-dot bg-tp-critical;
   }
   .tp-dot-cyclone {
-    @apply tp-dot bg-tp-violet shadow-[0_0_8px_#A855F7];
+    @apply tp-dot bg-white;
   }
   .tp-dot-rain {
-    @apply tp-dot bg-tp-cyan shadow-[0_0_8px_#22D3EE];
+    @apply tp-dot bg-tp-ice;
   }
   .tp-dot-tsunami {
-    @apply tp-dot bg-tp-violet shadow-[0_0_8px_#A855F7];
+    @apply tp-dot bg-tp-ice;
   }
   .tp-dot-flood {
-    @apply tp-dot bg-tp-cyan shadow-[0_0_8px_#22D3EE];
+    @apply tp-dot bg-tp-ice;
   }
 
-  /* Badge variants */
+  /* Badge variants: square, border-only, no tinted fill. */
   .tp-badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10px] font-medium uppercase tracking-wider;
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none border font-mono text-[10px] font-medium uppercase tracking-[0.16em];
   }
   .tp-badge-critical {
-    @apply tp-badge bg-tp-critical/15 text-tp-critical border border-tp-critical/30;
+    @apply tp-badge bg-transparent text-tp-critical border-tp-critical;
   }
   .tp-badge-high {
-    @apply tp-badge bg-tp-high/15 text-tp-high border border-tp-high/30;
+    @apply tp-badge bg-transparent text-tp-high border-tp-high;
   }
   .tp-badge-watch {
-    @apply tp-badge bg-tp-watch/15 text-tp-watch border border-tp-watch/30;
+    @apply tp-badge bg-transparent text-tp-watch border-tp-watch;
   }
   .tp-badge-normal {
-    @apply tp-badge bg-tp-normal/15 text-tp-normal border border-tp-normal/30;
+    @apply tp-badge bg-transparent text-tp-normal border-tp-normal;
   }
   .tp-badge-info {
-    @apply tp-badge bg-tp-cyan/15 text-tp-cyan border border-tp-cyan/30;
-  }
-
-  /* Gradient track for timeline */
-  .tp-gradient-track {
-    background: linear-gradient(90deg, var(--tp-accent-cyan), var(--tp-accent-violet));
+    @apply tp-badge bg-transparent text-tp-cyan border-tp-cyan;
   }
 
   /* Animations */
@@ -221,26 +209,9 @@
   .animate-spin-slow {
     animation: spin 2s linear infinite;
   }
-  .animate-radar-sweep {
-    animation: tp-radar-sweep 4s linear infinite;
-    transform-origin: center;
-  }
 }
 
 @layer utilities {
-  /* Gradient text */
-  .tp-gradient-text {
-    @apply bg-gradient-to-r from-tp-cyan to-tp-violet bg-clip-text text-transparent;
-  }
-
-  /* Cyan glow box-shadow */
-  .tp-glow-cyan {
-    box-shadow: 0 0 12px var(--tp-accent-cyan-glow), 0 0 24px var(--tp-accent-cyan-glow);
-  }
-  .tp-glow-violet {
-    box-shadow: 0 0 12px var(--tp-accent-violet-glow), 0 0 24px var(--tp-accent-violet-glow);
-  }
-
   /* Safe area insets */
   .safe-top {
     padding-top: env(safe-area-inset-top);

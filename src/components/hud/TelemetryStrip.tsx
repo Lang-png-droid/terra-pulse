@@ -133,9 +133,9 @@ export function TelemetryStrip({
 
   return (
     <div className="fixed top-0 left-0 right-0 z-40 safe-area-inset-top pointer-events-none">
-      <div className="mx-auto max-w-[1400px] px-3 pointer-events-auto">
+      <div className="pointer-events-auto">
         <div
-          className="relative flex h-11 min-h-[44px] items-center justify-between gap-4 border-b border-white/[0.09] bg-[#050507]/80 px-4 backdrop-blur-md md:h-10 md:min-h-[40px]"
+          className="relative flex h-11 items-center justify-between gap-4 border-b border-[#222222] bg-black px-3"
           role="region"
           aria-label="Telemetri sistem"
         >
@@ -143,8 +143,7 @@ export function TelemetryStrip({
             <span
               key={alertSignature}
               aria-hidden="true"
-              className="tp-pulse-line pointer-events-none absolute inset-x-0 bottom-0 h-[1px]"
-              style={{ background: 'linear-gradient(90deg, transparent, #22D3EE, #A855F7, transparent)' }}
+              className="tp-pulse-line pointer-events-none absolute inset-x-0 bottom-0 h-[1px] bg-[#FF4D2A]"
             />
           )}
           {/* Left: Live indicator + Ticker */}
@@ -156,14 +155,14 @@ export function TelemetryStrip({
                 className="tp-dot tp-dot-active animate-pulse-slow"
                 style={{ width: '6px', height: '6px', animationDuration: '2s' }}
               />
-              <span className="hidden font-mono text-[9px] uppercase tracking-[0.22em] text-tp-cyan md:inline">LIVE</span>
+              <span className="hidden font-mono text-[9px] uppercase tracking-[0.22em] text-white md:inline">LIVE</span>
             </div>
 
             {/* Ticker: clickable earthquake warning */}
             <button
               onClick={handleTickerClick}
               disabled={!tickerCoords || loading}
-              className="min-h-[44px] min-w-[44px] flex-1 self-stretch truncate rounded-[2px] px-1 py-0.5 text-left font-mono text-[11px] tabular-nums text-tp-text transition-colors hover:text-tp-cyan focus:outline-none focus-visible:ring-2 focus-visible:ring-tp-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-tp-bg disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[44px] min-w-[44px] flex-1 self-stretch truncate px-1 py-0.5 text-left font-mono text-[11px] tabular-nums text-white transition-colors hover:text-tp-cyan focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={tickerCoords ? 'Klik untuk memusatkan peta ke epicentrum' : 'Tidak ada peringatan aktif'}
               title={tickerCoords ? 'Klik untuk memusatkan peta ke epicentrum' : ''}
             >
@@ -173,7 +172,7 @@ export function TelemetryStrip({
               <button
                 type="button"
                 onClick={() => onLockOn(alertLngLat[1], alertLngLat[0])}
-                className="tp-touch flex-shrink-0 rounded-[2px] border border-tp-cyan/40 bg-tp-cyan/10 px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-cyan transition-colors hover:bg-tp-cyan/20"
+                className="tp-touch flex-shrink-0 border border-tp-cyan px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-cyan transition-colors hover:bg-tp-cyan hover:text-black"
                 aria-label="Pantau peringatan di peta"
               >
                 PANTAU
@@ -188,13 +187,13 @@ export function TelemetryStrip({
               className={searchOpen ? 'flex items-center' : 'hidden md:flex md:items-center'}
             >
               {/* Visible chip is the label (28px); the input itself is a 44px transparent target */}
-              <label className="flex h-7 cursor-text items-center rounded-[2px] border border-white/[0.09] bg-[#050507]/60 px-2 focus-within:ring-1 focus-within:ring-tp-cyan/50">
+              <label className="flex h-7 cursor-text items-center border border-[#222222] bg-black px-2 focus-within:border-white">
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari lokasi atau bencana"
-                  className="m-0 h-11 min-h-[44px] w-[150px] border-0 bg-transparent p-0 font-mono text-[11px] text-tp-text placeholder:text-zinc-500 focus:outline-none md:w-52"
+                  className="m-0 h-11 min-h-[44px] w-[150px] border-0 bg-transparent p-0 font-mono text-[11px] text-white placeholder:text-zinc-500 focus:outline-none md:w-52"
                   aria-label="Cari lokasi atau bencana"
                 />
               </label>
@@ -202,7 +201,7 @@ export function TelemetryStrip({
             <button
               type="button"
               onClick={() => setSearchOpen((v) => !v)}
-              className="tp-touch rounded-[2px] text-tp-muted transition-colors hover:text-tp-cyan md:hidden"
+              className="tp-touch text-white transition-colors hover:bg-white/10 md:hidden"
               aria-label={searchOpen ? 'Tutup pencarian' : 'Buka pencarian'}
               aria-expanded={searchOpen}
             >
@@ -215,7 +214,7 @@ export function TelemetryStrip({
               type="button"
               onClick={handleNearMe}
               disabled={locating}
-              className="tp-touch flex-shrink-0 rounded-[2px] border border-white/[0.09] bg-[#050507]/60 p-1 text-tp-muted transition-all hover:border-tp-cyan/50 hover:bg-tp-cyan/10 hover:text-tp-cyan disabled:cursor-not-allowed disabled:opacity-50"
+              className="tp-touch flex-shrink-0 border border-[#222222] p-1 text-white transition-colors hover:border-white disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Lokasi saya (GPS)"
               aria-busy={locating}
               title={locating ? 'Mencari lokasi...' : 'Lokasi saya'}
@@ -229,7 +228,7 @@ export function TelemetryStrip({
             <button
               onClick={onRefresh}
               disabled={loading}
-              className="tp-touch flex-shrink-0 rounded-[2px] border border-white/[0.09] bg-[#050507]/60 p-1 text-tp-muted transition-all hover:border-tp-cyan/50 hover:bg-tp-cyan/10 hover:text-tp-cyan disabled:cursor-not-allowed disabled:opacity-50"
+              className="tp-touch flex-shrink-0 border border-[#222222] p-1 text-white transition-colors hover:border-white disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Muat ulang data"
               title="Muat ulang data"
             >

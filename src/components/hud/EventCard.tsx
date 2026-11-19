@@ -5,7 +5,6 @@ import { getDisasterFeatureLngLat } from '@/types/geo';
 import { DisasterFeature, DisasterType } from '@/types/disaster';
 import { haversineDistance, formatDistance } from '@/lib/geoMath';
 import { simulateTsunami } from '@/components/map/TsunamiSimulation';
-import { PanelCorners } from './PanelCorners';
 
 interface EventCardProps {
   feature: DisasterFeature | null;
@@ -17,13 +16,13 @@ interface EventCardProps {
 }
 
 const TYPE_COLORS: Record<DisasterType, string> = {
-  earthquake: '#22D3EE',
-  hotspot: '#EF4444',
-  volcano: '#F97316',
-  cyclone: '#A855F7',
-  flood: '#3B82F6',
-  tsunami: '#06B6D4',
-  storm: '#8B5CF6',
+  earthquake: '#FF4D2A',
+  hotspot: '#F59E0B',
+  volcano: '#FF4D2A',
+  cyclone: '#FFFFFF',
+  flood: '#38BDF8',
+  tsunami: '#38BDF8',
+  storm: '#FFFFFF',
 };
 
 const TYPE_LABELS: Record<DisasterType, string> = {
@@ -95,8 +94,8 @@ export function EventCard({
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!dragStartRef.current || !sheetRef.current) return;
     const deltaY = dragStartRef.current.y - e.touches[0].clientY;
-    // CSS max-h caps the visual height; keep the drag cap on the same 0.85vh basis.
-    const newHeight = Math.max(120, Math.min(window.innerHeight * 0.85, dragStartRef.current.height + deltaY));
+    // CSS max-h (100dvh - 157px: 97px strip + 8px gap + 52px top strip) caps the visual height.
+    const newHeight = Math.max(120, Math.min(window.innerHeight - 157, dragStartRef.current.height + deltaY));
     sheetRef.current.style.height = `${newHeight}px`;
     if (newHeight > window.innerHeight * 0.5) setExpanded(true);
   };
@@ -111,7 +110,7 @@ export function EventCard({
   const lngLat = getDisasterFeatureLngLat(feature);
   const [lng, lat] = lngLat ?? [0, 0];
   const type = (props.type || 'earthquake') as DisasterType;
-  const color = TYPE_COLORS[type] || '#22D3EE';
+  const color = TYPE_COLORS[type] || '#FF4D2A';
 
   // Calculate distance from user
   let distanceStr = '';
@@ -121,23 +120,17 @@ export function EventCard({
   }
 
   const getMagnitudeColor = (mag?: number) => {
-    if (!mag) return '#22D3EE';
-    if (mag >= 6.0) return '#EF4444';
-    if (mag >= 5.0) return '#F97316';
-    // Cyan to violet gradient
-    const t = Math.min(mag / 5.0, 1);
-    const r = Math.round(34 + (168 - 34) * t);
-    const g = Math.round(211 + (85 - 211) * t);
-    const b = Math.round(238 + (247 - 238) * t);
-    return `rgb(${r}, ${g}, ${b})`;
+    if (!mag) return '#FFFFFF';
+    if (mag >= 5.0) return '#FF4D2A';
+    return '#FFFFFF';
   };
 
   const getAlertColor = (level?: string) => {
     switch (level) {
-      case 'Awas': return '#EF4444';
-      case 'Siaga': return '#F97316';
-      case 'Waspada': return '#EAB308';
-      default: return '#22C55E';
+      case 'Awas': return '#FF4D2A';
+      case 'Siaga': return '#FF4D2A';
+      case 'Waspada': return '#F59E0B';
+      default: return '#71717A';
     }
   };
 
@@ -167,18 +160,17 @@ export function EventCard({
     }
   };
 
+  // Bottom telemetry strip is 97px tall (44px metric row + 1px rule + 52px playback row),
+  // so the card docks 8px above it and reserves 60px for the top telemetry strip.
   return (
     <div
       ref={sheetRef}
-      className={`fixed left-0 right-0 z-40 transition-all duration-300 ${
+      className={`fixed z-40 transition-all duration-300 ${
         isMobile
-          ? 'bottom-[calc(env(safe-area-inset-bottom)_+_80px)] max-h-[calc(85vh_-_env(safe-area-inset-bottom)_-_80px)]'
-          : 'bottom-[88px] xl:bottom-4 left-auto right-4 w-80 max-h-[70vh]'
+          ? 'left-0 right-0 bottom-[calc(env(safe-area-inset-bottom)_+_97px)] max-h-[calc(100dvh_-_env(safe-area-inset-bottom)_-_157px)]'
+          : 'bottom-[105px] left-auto right-4 w-80 max-h-[calc(100dvh_-_177px)]'
       }`}
-      style={{
-        height: expanded ? undefined : isMobile ? '140px' : 'auto',
-        transform: expanded ? 'translateY(0)' : isMobile ? 'translateY(0)' : 'translateY(0)',
-      }}
+      style={{ height: expanded ? undefined : isMobile ? '140px' : 'auto' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -186,36 +178,35 @@ export function EventCard({
       {/* Backdrop overlay (mobile) */}
       {isMobile && expanded && (
         <div
-          className="fixed inset-0 z-[-1] bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[-1] bg-black/70"
           onClick={() => { setExpanded(false); onClose(); }}
           aria-hidden="true"
         />
       )}
 
       {/* Main card */}
-      <div className="tp-panel-strong relative flex flex-col overflow-hidden tabular-nums">
-        <PanelCorners />
+      <div className="tp-panel-strong flex flex-col overflow-hidden tabular-nums">
         {/* Mobile drag handle indicator */}
         {isMobile && (
-          <div className="flex items-center justify-center border-b border-white/[0.09] py-2">
-            <div className="h-0.5 w-10 bg-white/20" />
+          <div className="flex items-center justify-center border-b border-[#1A1A1A] py-2">
+            <div className="h-px w-10 bg-[#3F3F46]" />
           </div>
         )}
         {/* Header / Drag handle */}
-        <div className="flex min-h-[44px] items-center justify-between border-b border-white/[0.09] px-3 py-2">
+        <div className="flex min-h-[44px] items-center justify-between border-b border-[#1A1A1A] px-3 py-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[2px]"
-              style={{ background: `${color}20`, color }}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center border"
+              style={{ background: 'transparent', color, borderColor: color }}
             >
               {TYPE_ICONS[type]}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="tp-title truncate tracking-[0.14em] text-tp-text">{TYPE_LABELS[type]}</span>
+                <span className="tp-title truncate tracking-[0.14em] text-white">{TYPE_LABELS[type]}</span>
                 <span
-                  className="px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular-nums"
-                  style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
+                  className="border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular-nums"
+                  style={{ background: 'transparent', color, borderColor: color }}
                 >
                   {type === 'earthquake' && props.magnitude ? `M${props.magnitude.toFixed(1)}` :
                    type === 'volcano' && props.alertLevel ? props.alertLevel.toUpperCase() :
@@ -236,10 +227,10 @@ export function EventCard({
             )}
             <button
               onClick={onClose}
-              className="tp-touch rounded-[2px] transition-colors hover:bg-white/[0.06]"
+              className="tp-touch text-white transition-colors hover:bg-white/10"
               aria-label="Tutup detail"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-tp-muted">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -248,20 +239,15 @@ export function EventCard({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-4" style={{ maxHeight: isMobile ? 'calc(85vh - 80px - env(safe-area-inset-bottom))' : 'calc(70vh - 140px)' }}>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
           {/* Primary metrics — labels over values, no nested boxes */}
           <div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {type === 'earthquake' && props.magnitude && (
                 <div className="flex flex-col">
                   <span className="tp-micro">MAGNITUDO</span>
-                  <span
-                    className="tp-metric leading-none"
-                    style={{
-                      color: getMagnitudeColor(props.magnitude),
-                      textShadow: `0 0 12px ${getMagnitudeColor(props.magnitude)}80`,
-                    }}
-                  >
+                  <span className="tp-metric leading-none" style={{ color: getMagnitudeColor(props.magnitude) }}>
+
                     M{props.magnitude.toFixed(1)}
                   </span>
                 </div>
@@ -326,12 +312,12 @@ export function EventCard({
           </div>
 
           {/* Coordinates */}
-          <div className="border border-white/[0.09] bg-white/[0.02] p-3">
+          <div className="border border-[#222222] p-3">
             <span className="tp-micro block">KOORDINAT</span>
             <div className="flex flex-wrap gap-2 mt-1 tabular-nums">
               <button
                 onClick={() => navigator.clipboard.writeText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`)}
-                className="tp-touch flex items-center gap-1 rounded-[2px] border border-white/[0.09] bg-[#050507] px-2 py-1 font-mono text-xs tabular-nums text-tp-text transition-colors hover:border-tp-cyan/40"
+                className="tp-touch flex items-center gap-1 border border-[#222222] px-2 py-1 font-mono text-xs tabular-nums text-white transition-colors hover:border-white"
               >
                 {lat.toFixed(6)}, {lng.toFixed(6)}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -341,7 +327,7 @@ export function EventCard({
               </button>
               <button
                 onClick={() => onCenterMap(lat, lng)}
-                className="tp-touch flex items-center gap-1 rounded-[2px] border border-tp-cyan/30 bg-tp-cyan/10 px-2 py-1 font-mono text-xs text-tp-cyan transition-colors hover:bg-tp-cyan/20"
+                className="tp-touch flex items-center gap-1 border border-tp-cyan px-2 py-1 font-mono text-xs uppercase tracking-[0.16em] text-tp-cyan transition-colors hover:bg-tp-cyan hover:text-black"
               >
                 Center
               </button>
@@ -350,13 +336,13 @@ export function EventCard({
 
           {/* Tsunami simulation trigger */}
           {type === 'earthquake' && props.magnitude && props.magnitude >= 6.5 && (props.depth || 0) <= 70 && (
-            <div className="border border-tp-cyan/30 bg-tp-cyan/[0.07] p-3">
+            <div className="border border-[#222222] p-3">
               <span className="mb-2 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-tp-cyan">
                 SIMULASI TSUNAMI TERSEDIA
               </span>
               <button
                 onClick={handleTsunamiSimulate}
-                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[2px] border border-tp-cyan/40 bg-tp-cyan/15 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-cyan transition-colors hover:bg-tp-cyan/25"
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 border border-tp-cyan py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-cyan transition-colors hover:bg-tp-cyan hover:text-black"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -368,8 +354,8 @@ export function EventCard({
 
           {/* Active tsunami simulation display */}
           {showTsunami && tsunamiSimulation && (
-            <div className="space-y-2 border border-tp-violet/30 bg-tp-violet/[0.07] p-3">
-              <span className="block font-mono text-[9px] uppercase tracking-[0.22em] text-tp-violet">
+            <div className="space-y-2 border border-[#222222] p-3">
+              <span className="block font-mono text-[9px] uppercase tracking-[0.22em] text-white">
                 TSUNAMI SIMULATION ACTIVE
               </span>
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -388,7 +374,7 @@ export function EventCard({
               </div>
               <button
                 onClick={() => { setShowTsunami(false); setTsunamiSimulation(null); }}
-                className="tp-touch w-full py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-violet transition-colors hover:text-tp-text"
+                className="tp-touch w-full py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-white hover:text-black"
               >
                 HIDE SIMULATION
               </button>
@@ -399,7 +385,7 @@ export function EventCard({
           {isMobile && (
             <div className="flex items-center justify-center pt-2">
               <div
-                className={`w-8 h-0.5 rounded-full transition-colors ${
+                className={`h-px w-8 transition-colors ${
                   expanded ? 'bg-tp-cyan' : 'bg-tp-border'
                 }`}
               />
