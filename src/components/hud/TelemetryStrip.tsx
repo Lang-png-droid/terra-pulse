@@ -148,7 +148,7 @@ export function TelemetryStrip({
             />
           )}
           {/* Left: Live indicator + Ticker */}
-          <div className="flex items-center gap-3 min-w-0 flex-1" aria-live="polite" aria-atomic="true">
+          <div className="flex min-w-0 flex-1 items-center gap-2" aria-live="polite" aria-atomic="true">
             {/* Live indicator: pulsing cyan dot + LIVE label */}
             <div className="flex items-center gap-2 flex-shrink-0" aria-hidden="true">
               <span
@@ -156,14 +156,14 @@ export function TelemetryStrip({
                 className="tp-dot tp-dot-active animate-pulse-slow"
                 style={{ width: '6px', height: '6px', animationDuration: '2s' }}
               />
-              <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-tp-cyan">LIVE</span>
+              <span className="hidden font-mono text-[9px] uppercase tracking-[0.22em] text-tp-cyan md:inline">LIVE</span>
             </div>
 
             {/* Ticker: clickable earthquake warning */}
             <button
               onClick={handleTickerClick}
               disabled={!tickerCoords || loading}
-              className="min-h-[44px] min-w-0 flex-1 self-stretch truncate rounded-[2px] px-1 py-0.5 text-left font-mono text-[11px] tabular-nums text-tp-text transition-colors hover:text-tp-cyan focus:outline-none focus-visible:ring-2 focus-visible:ring-tp-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-tp-bg disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-h-[44px] min-w-[44px] flex-1 self-stretch truncate rounded-[2px] px-1 py-0.5 text-left font-mono text-[11px] tabular-nums text-tp-text transition-colors hover:text-tp-cyan focus:outline-none focus-visible:ring-2 focus-visible:ring-tp-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-tp-bg disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={tickerCoords ? 'Klik untuk memusatkan peta ke epicentrum' : 'Tidak ada peringatan aktif'}
               title={tickerCoords ? 'Klik untuk memusatkan peta ke epicentrum' : ''}
             >

@@ -95,6 +95,7 @@ export function EventCard({
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!dragStartRef.current || !sheetRef.current) return;
     const deltaY = dragStartRef.current.y - e.touches[0].clientY;
+    // CSS max-h caps the visual height; keep the drag cap on the same 0.85vh basis.
     const newHeight = Math.max(120, Math.min(window.innerHeight * 0.85, dragStartRef.current.height + deltaY));
     sheetRef.current.style.height = `${newHeight}px`;
     if (newHeight > window.innerHeight * 0.5) setExpanded(true);
@@ -171,8 +172,8 @@ export function EventCard({
       ref={sheetRef}
       className={`fixed left-0 right-0 z-40 transition-all duration-300 ${
         isMobile
-          ? 'bottom-[calc(env(safe-area-inset-bottom)_+_56px)] max-h-[calc(85vh_-_env(safe-area-inset-bottom)_-_56px)]'
-          : 'bottom-[68px] xl:bottom-4 left-auto right-4 w-80 max-h-[70vh]'
+          ? 'bottom-[calc(env(safe-area-inset-bottom)_+_80px)] max-h-[calc(85vh_-_env(safe-area-inset-bottom)_-_80px)]'
+          : 'bottom-[88px] xl:bottom-4 left-auto right-4 w-80 max-h-[70vh]'
       }`}
       style={{
         height: expanded ? undefined : isMobile ? '140px' : 'auto',
@@ -247,7 +248,7 @@ export function EventCard({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-4" style={{ maxHeight: isMobile ? 'calc(85vh - 96px - env(safe-area-inset-bottom))' : 'calc(70vh - 120px)' }}>
+        <div className="flex-1 overflow-y-auto p-3 space-y-4" style={{ maxHeight: isMobile ? 'calc(85vh - 80px - env(safe-area-inset-bottom))' : 'calc(70vh - 140px)' }}>
           {/* Primary metrics — labels over values, no nested boxes */}
           <div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
