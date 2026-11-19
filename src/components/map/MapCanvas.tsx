@@ -264,9 +264,11 @@ export function MapCanvas({
       // Stable wrapper: a fresh closure per frame would churn the Deck instance.
       onHover: (info) => handleHover(info as HoverInfo),
       // deck.gl owns the canvas cursor; writing style.cursor ourselves loses to
-      // its _updateCursor pass. Let it derive the affordance from picking state.
-      getCursor: ({ isHovering, isDragging }) =>
-        isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab',
+      // its _updateCursor pass. With interleaved:true the overlay builds Deck
+      // without a controller, so deck's own isDragging stays false forever -
+      // read the live state from MapLibre's dragPan instead (per-frame call).
+      getCursor: ({ isHovering }) =>
+        mapRef.current?.dragPan?.isActive() ? 'grabbing' : isHovering ? 'pointer' : 'grab',
     });
     map.addControl(overlay);
     overlayRef.current = overlay;
