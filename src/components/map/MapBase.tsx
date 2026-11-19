@@ -55,7 +55,10 @@ export function applyBrutalistBasemap(map: MapLibreMap) {
     }
   };
 
-  paint('background', { 'background-color': GRID_OCEAN });
+  // In dark-matter the `background` layer IS the land tone (#0e0e0e) and every
+  // landcover/landuse/park fill repeats that same stop, so it takes GRID_LAND.
+  // `water` is a separate fill drawn above it and owns the ocean.
+  paint('background', { 'background-color': GRID_LAND });
   paint('water', { 'fill-color': GRID_OCEAN });
   paint('water_shadow', { 'fill-color': GRID_OCEAN });
   for (const id of LAND_IDS) paint(id, { 'fill-color': GRID_LAND });
@@ -141,7 +144,7 @@ const FALLBACK_STYLE: StyleSpecification = {
     {
       id: 'background',
       type: 'background',
-      paint: { 'background-color': '#000000' },
+      paint: { 'background-color': '#111111' },
     },
     // Ambient orbital scanline grid (very subtle)
     {

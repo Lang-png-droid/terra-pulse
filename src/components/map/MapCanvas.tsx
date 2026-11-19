@@ -234,7 +234,6 @@ export function MapCanvas({
     const feature = (info.object as { __feature?: DisasterFeature } | undefined)?.__feature;
     if (!info.picked || !feature) {
       if (el.style.display !== 'none') el.style.display = 'none';
-      if (map.getCanvas().style.cursor !== '') map.getCanvas().style.cursor = '';
       return;
     }
 
@@ -250,7 +249,6 @@ export function MapCanvas({
     el.style.top = `${Math.max(0, top)}px`;
     el.textContent = calloutText(feature);
     if (el.style.display !== 'block') el.style.display = 'block';
-    map.getCanvas().style.cursor = 'pointer';
   }, []);
 
   // Handle MapBase events
@@ -265,6 +263,10 @@ export function MapCanvas({
       layers: layersRef.current,
       // Stable wrapper: a fresh closure per frame would churn the Deck instance.
       onHover: (info) => handleHover(info as HoverInfo),
+      // deck.gl owns the canvas cursor; writing style.cursor ourselves loses to
+      // its _updateCursor pass. Let it derive the affordance from picking state.
+      getCursor: ({ isHovering, isDragging }) =>
+        isDragging ? 'grabbing' : isHovering ? 'pointer' : 'grab',
     });
     map.addControl(overlay);
     overlayRef.current = overlay;
