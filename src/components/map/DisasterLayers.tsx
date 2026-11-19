@@ -144,6 +144,7 @@ export function createDisasterLayers({
     layers.push(
       new ScatterplotLayer({
         id: 'earthquakes-glow-inner',
+        data: eqData,
         getPosition: (d: any) => d.geometry.coordinates,
         getRadius: (d: any) => d.radius * 1.6,
         getFillColor: (d: any) => [d.strokeColor[0], d.strokeColor[1], d.strokeColor[2], 80] as [number, number, number, number],
