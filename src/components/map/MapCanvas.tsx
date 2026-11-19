@@ -200,9 +200,11 @@ export function MapCanvas({
       return;
     }
 
-    const features = map.queryRenderedFeatures(e.point, {
-      layers: ['tsunami-rings'],
-    });
+    // The tsunami layer is a deck.gl layer that only exists while the toggle is
+    // on; querying a missing layer id throws, so skip the query entirely.
+    const features = map.getLayer('tsunami-rings')
+      ? map.queryRenderedFeatures(e.point, { layers: ['tsunami-rings'] })
+      : [];
 
     if (features.length > 0) {
       const feature = features[0].properties as Record<string, unknown>;

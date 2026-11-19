@@ -277,11 +277,14 @@ export function normalizeRainViewer(data: any): RainViewerTileInfo[] {
   const past = data?.radar?.past || [];
   const nowcast = data?.radar?.nowcast || [];
 
-  for (const frame of [...past, ...nowcast].slice(-24)) { // Last 24 frames
+  // RainViewer's tile URL is {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png;
+  // omitting the trailing color/smooth/snow segments makes every tile 404.
+  // Newest frame first, so consumers that use [0] get a frame that is still live.
+  for (const frame of [...nowcast].reverse().concat([...past].reverse())) {
     if (!frame.path) continue;
     tiles.push({
       timestamp: frame.time * 1000,
-      path: `${data.host}${frame.path}/256/{z}/{x}/{y}.png`,
+      path: `${data.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`,
       bounds: [[-90, -180], [90, 180]], // Global coverage
     });
   }
