@@ -3,7 +3,21 @@
 import { ScatterplotLayer, PolygonLayer, PathLayer } from '@deck.gl/layers';
 import { DisasterFeature, LayerVisibility } from '@/types/disaster';
 
-function hexToRgba(hex: string, alpha: number): [number, number, number, number] {
+// ===========================
+// BRUTALIST PALETTE - flat, fully opaque, zero glow.
+// ===========================
+const RED: [number, number, number] = [255, 77, 42]; // #FF4D2A earthquake, volcano
+const AMBER: [number, number, number] = [245, 158, 11]; // #F59E0B hotspot
+const SKY: [number, number, number] = [56, 189, 248]; // #38BDF8 flood, hydrological
+const WHITE: [number, number, number] = [255, 255, 255]; // cyclone, tsunami, selection
+
+// Dot-matrix opacity ladder: phenomena step through 4 discrete alphas instead of
+// fading smoothly, so they read as printed telemetry rather than a soft glow.
+const STEPS = [235, 165, 95, 35];
+
+type RGBA = [number, number, number, number];
+
+function hexToRgba(hex: string, alpha: number): RGBA {
   const cleanHex = hex.replace('#', '');
   const r = parseInt(cleanHex.slice(0, 2), 16);
   const g = parseInt(cleanHex.slice(2, 4), 16);
@@ -20,7 +34,7 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
-function getVolcanoAlertColor(alertLevel: string): [number, number, number, number] {
+function getVolcanoAlertColor(alertLevel: string): RGBA {
   switch (alertLevel.toLowerCase()) {
     case 'warning':
     case 'red':
@@ -56,10 +70,10 @@ function getVolcanoAlertColorHex(alertLevel: string): string {
   }
 }
 
-function getEarthquakeColor(depth: number): [number, number, number, number] {
-  // Shallow (< 70km): cyan #22D3EE, Deep (>= 70km): violet #A855F7
-  if (depth < 70) return [34, 211, 238, 230]; // Cyan for shallow
-  return [168, 85, 247, 230]; // Violet for deep
+// Brutalist direction: one flat red for every seismic event. Depth is reported
+// in the callout, not encoded as a hue shift.
+function getEarthquakeColor(_depth: number): RGBA {
+  return [...RED, 235];
 }
 
 function generateCirclePolygon(
@@ -90,6 +104,80 @@ interface DisasterLayersProps {
   selectedFeatureId: string | null;
 }
 
+// ===========================
+// BULLSEYE - solid core + hairline ring + outer tick ring for active events.
+// All radii are in pixels, so a marker reads identically at any zoom and never
+// uses a large low-alpha circle to fake a glow.
+// ===========================
+interface BullseyeDatum {
+  position: [number, number];
+  color: [number, number, number];
+  selected: boolean;
+  active: boolean;
+  __feature: DisasterFeature;
+}
+
+function bullseyeLayers(id: string, data: BullseyeDatum[]): Array<any> {
+  if (data.length === 0) return [];
+  return [
+    new ScatterplotLayer({
+      id,
+      data,
+      getPosition: (d: BullseyeDatum) => d.position,
+      getRadius: 5,
+      radiusUnits: 'pixels',
+      radiusMinPixels: 4,
+      radiusMaxPixels: 6,
+      getFillColor: (d: BullseyeDatum) =>
+        (d.selected ? [...WHITE, 255] : [...d.color, 255]) as RGBA,
+      pickable: true,
+      stroked: false,
+      filled: true,
+    }),
+    new ScatterplotLayer({
+      id: `${id}-rings`,
+      data,
+      getPosition: (d: BullseyeDatum) => d.position,
+      getRadius: 11,
+      radiusUnits: 'pixels',
+      radiusMinPixels: 11,
+      radiusMaxPixels: 11,
+      getLineColor: (d: BullseyeDatum) =>
+        (d.selected ? [...WHITE, 255] : [...d.color, 220]) as RGBA,
+      getLineWidth: (d: BullseyeDatum) => (d.selected ? 2 : 1.5),
+      lineWidthUnits: 'pixels',
+      lineWidthMinPixels: 1.5,
+      lineWidthMaxPixels: 2,
+      stroked: true,
+      filled: false,
+      pickable: false,
+    }),
+    new ScatterplotLayer({
+      id: `${id}-ticks`,
+      data: data.filter((d) => d.active),
+      getPosition: (d: BullseyeDatum) => d.position,
+      getRadius: 18,
+      radiusUnits: 'pixels',
+      radiusMinPixels: 18,
+      radiusMaxPixels: 18,
+      getLineColor: (d: BullseyeDatum) =>
+        (d.selected ? [...WHITE, 200] : [...d.color, 140]) as RGBA,
+      getLineWidth: 1,
+      lineWidthUnits: 'pixels',
+      lineWidthMinPixels: 1,
+      lineWidthMaxPixels: 1,
+      stroked: true,
+      filled: false,
+      pickable: false,
+    }),
+  ];
+}
+
+function pointOf(f: DisasterFeature): [number, number] {
+  const c = f.geometry.coordinates;
+  return Array.isArray(c) && typeof c[0] === 'number' ? (c as [number, number]) : [0, 0];
+}
+
 export function createDisasterLayers({
   earthquakes,
   hotspots: _hotspots, // animated per-frame in createAnimatedLayers
@@ -101,242 +189,78 @@ export function createDisasterLayers({
   const layers: Array<any> = [];
 
   // ===========================
-  // EARTHQUAKES - ScatterplotLayer with cyan/violet glow + crosshair reticle
+  // EARTHQUAKES - flat red bullseye; tick ring marks magnitude >= 6.
   // ===========================
   if (layerVisibility.earthquakes && earthquakes.length > 0) {
-    const eqData = earthquakes.map((f) => {
-      const mag = f.properties.magnitude || 1;
-      const depth = f.properties.depth || 10;
-      // Scale: magnitude * 6 for radius in pixels (min 6, max 40)
-      const baseRadius = Math.max(6, Math.min(40, mag * 6));
-      const isShallow = depth < 70;
-      const fillColor = isShallow ? [34, 211, 238, 200] : [168, 85, 247, 200]; // Cyan shallow, Violet deep
-      const strokeColor = isShallow ? [34, 211, 238, 255] : [168, 85, 247, 255];
-      return {
-        ...f,
-        radius: baseRadius,
-        fillColor: f.id === selectedFeatureId ? [255, 255, 0, 255] : fillColor,
-        strokeColor: f.id === selectedFeatureId ? [255, 255, 0, 255] : strokeColor,
-        magnitude: mag,
-        depth,
-        isShallow,
-        __feature: f,
-      };
-    });
-
-    // 1. Outer glow ring (larger, more transparent) - renders first (bottom)
     layers.push(
-      new ScatterplotLayer({
-        id: 'earthquakes-glow-outer',
-        data: eqData,
-        getPosition: (d: any) => d.geometry.coordinates,
-        getRadius: (d: any) => d.radius * 2.5,
-        getFillColor: (d: any) => [d.strokeColor[0], d.strokeColor[1], d.strokeColor[2], 40] as [number, number, number, number],
-        pickable: false,
-        radiusMinPixels: 12,
-        radiusMaxPixels: 120,
-        stroked: false,
-        filled: true,
-      })
+      ...bullseyeLayers(
+        'earthquakes',
+        earthquakes.map((f) => ({
+          position: pointOf(f),
+          color: RED,
+          selected: f.id === selectedFeatureId,
+          active: (f.properties.magnitude || 0) >= 6,
+          __feature: f,
+        }))
+      )
     );
-
-    // 2. Inner glow ring (medium, semi-transparent)
-    layers.push(
-      new ScatterplotLayer({
-        id: 'earthquakes-glow-inner',
-        data: eqData,
-        getPosition: (d: any) => d.geometry.coordinates,
-        getRadius: (d: any) => d.radius * 1.6,
-        getFillColor: (d: any) => [d.strokeColor[0], d.strokeColor[1], d.strokeColor[2], 80] as [number, number, number, number],
-        pickable: false,
-        radiusMinPixels: 8,
-        radiusMaxPixels: 80,
-        stroked: false,
-        filled: true,
-      })
-    );
-
-    // 3. Main earthquake marker (solid circle with stroke)
-    layers.push(
-      new ScatterplotLayer({
-        id: 'earthquakes',
-        data: eqData,
-        getPosition: (d: any) => d.geometry.coordinates,
-        getRadius: (d: any) => d.radius,
-        getFillColor: (d: any) => d.fillColor,
-        getLineColor: (d: any) => d.strokeColor,
-        getLineWidth: 2,
-        pickable: true,
-        radiusMinPixels: 6,
-        radiusMaxPixels: 60,
-        stroked: true,
-        filled: true,
-      })
-    );
-
-    // 4. Crosshair reticle (+) at epicenter - rendered as PathLayer for crisp '+' shape
-    layers.push(
-      new PathLayer({
-        id: 'earthquake-crosshairs',
-        data: eqData.flatMap((d) => {
-          // Narrow geometry to Point since earthquakes are always Point type
-          const pointGeom = d.geometry as GeoJSON.Point;
-          const [lng, lat] = pointGeom.coordinates as [number, number];
-          const size = Math.max(8, Math.min(24, d.radius * 0.7)); // Crosshair arm length in pixels
-          const degSize = size / 111000; // ~111km per degree at equator
-          return [
-            {
-              ...d,
-              path: [
-                [lng - degSize, lat],
-                [lng + degSize, lat],
-              ],
-              color: d.strokeColor,
-              __feature: d,
-            },
-            {
-              ...d,
-              path: [
-                [lng, lat - degSize],
-                [lng, lat + degSize],
-              ],
-              color: d.strokeColor,
-              __feature: d,
-            },
-          ];
-        }),
-        getPath: (d: any) => d.path,
-        getColor: (d: any) => d.color,
-        getWidth: 2,
-        widthMinPixels: 1.5,
-        widthMaxPixels: 3,
-        capRounded: true,
-        jointRounded: true,
-        pickable: false,
-      })
-    );
-
   }
 
   // ===========================
-  // VOLCANOES - ScatterplotLayer with alert level colors + hazard radius polygons
+  // VOLCANOES - flat red bullseye; tick ring marks any non-Normal alert.
   // ===========================
   if (layerVisibility.volcanoes && volcanoes.length > 0) {
-    // Main volcano markers
     layers.push(
-      new ScatterplotLayer({
-        id: 'volcanoes',
-        data: volcanoes.map((f) => {
-          const alertLevel = f.properties.alertLevel || 'Normal';
-          const alertColor = getVolcanoAlertColor(alertLevel);
-          // Radius based on hazard radius in km, converted to meters for getRadius
-          const hazardRadiusKm = f.properties.hazardRadiusKm || 5;
-          return {
-            ...f,
-            radius: (hazardRadiusKm * 1000) / 12, // Scale for visual representation
-            color: f.id === selectedFeatureId ? [255, 255, 0, 255] : alertColor,
-            alertLevel,
-            __feature: f,
-          };
-        }),
-        getPosition: (d: any) => d.geometry.coordinates as [number, number],
-        getRadius: (d: any) => d.radius,
-        getFillColor: (d: any) => d.color,
-        pickable: true,
-        radiusMinPixels: 10,
-        radiusMaxPixels: 60,
-        stroked: true,
-        getLineColor: [255, 255, 255, 180],
-        getLineWidth: 2,
-      })
+      ...bullseyeLayers(
+        'volcanoes',
+        volcanoes.map((f) => ({
+          position: pointOf(f),
+          color: RED,
+          selected: f.id === selectedFeatureId,
+          active: (f.properties.alertLevel || 'Normal') !== 'Normal',
+          __feature: f,
+        }))
+      )
     );
 
-    // Hazard radius polygons (semi-transparent filled circles)
+    // Hazard radius as a 1px hairline outline: geometry, not a fill glow.
     layers.push(
       new PolygonLayer({
         id: 'volcano-hazard-zones',
         data: volcanoes.map((f) => {
-          const coords = f.geometry.coordinates;
-          const alertLevel = f.properties.alertLevel || 'Normal';
-          const [lng, lat] = (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number')
-            ? coords as [number, number]
-            : [0, 0];
+          const [lng, lat] = pointOf(f);
           return {
-            ...f,
             polygon: generateCirclePolygon(lat, lng, f.properties.hazardRadiusKm || 5),
-            color: [...hexToRgb(getVolcanoAlertColorHex(alertLevel)), 30],
             __feature: f,
           };
         }),
         getPolygon: (d: any) => d.polygon,
-        getFillColor: (d: any) => d.color,
+        getLineColor: [...RED, 90] as RGBA,
+        getLineWidth: 1,
+        lineWidthUnits: 'pixels',
+        lineWidthMinPixels: 1,
         pickable: false,
-        filled: true,
-        stroked: false,
+        filled: false,
+        stroked: true,
       })
     );
   }
 
   // ===========================
-  // CYCLONES - quiet center disc + glowing edge ring (vortex/track are animated)
+  // CYCLONES - white bullseye; vortex and track are animated on top.
   // ===========================
   if (layerVisibility.cyclones && cyclones.length > 0) {
-    const cycloneData = cyclones.map((f) => ({
-      ...f,
-      radius: Math.max(15000, (f.properties.windSpeedKmh || 50) * 500),
-      selected: f.id === selectedFeatureId,
-      __feature: f,
-    }));
-
-    // Center disc: low alpha so the animated vortex stays readable on top.
     layers.push(
-      new ScatterplotLayer({
-        id: 'cyclones',
-        data: cycloneData,
-        getPosition: (d: any) => d.geometry.coordinates as [number, number],
-        getRadius: (d: any) => d.radius,
-        getFillColor: (d: any) =>
-          (d.selected ? [255, 255, 0, 120] : [168, 85, 247, 35]) as [number, number, number, number],
-        pickable: true,
-        radiusMinPixels: 10,
-        radiusMaxPixels: 34,
-        stroked: false,
-        filled: true,
-      })
-    );
-
-    // Soft halo + crisp ring at the marker edge.
-    layers.push(
-      new ScatterplotLayer({
-        id: 'cyclone-rings-glow',
-        data: cycloneData,
-        getPosition: (d: any) => d.geometry.coordinates as [number, number],
-        getRadius: (d: any) => d.radius,
-        getLineColor: (d: any) =>
-          (d.selected ? [255, 255, 0, 70] : [168, 85, 247, 60]) as [number, number, number, number],
-        getLineWidth: 7,
-        pickable: false,
-        radiusMinPixels: 10,
-        radiusMaxPixels: 34,
-        stroked: true,
-        filled: false,
-      })
-    );
-    layers.push(
-      new ScatterplotLayer({
-        id: 'cyclone-rings',
-        data: cycloneData,
-        getPosition: (d: any) => d.geometry.coordinates as [number, number],
-        getRadius: (d: any) => d.radius,
-        getLineColor: (d: any) =>
-          (d.selected ? [255, 255, 0, 240] : [168, 85, 247, 230]) as [number, number, number, number],
-        getLineWidth: 2,
-        pickable: false,
-        radiusMinPixels: 10,
-        radiusMaxPixels: 34,
-        stroked: true,
-        filled: false,
-      })
+      ...bullseyeLayers(
+        'cyclones',
+        cyclones.map((f) => ({
+          position: pointOf(f),
+          color: WHITE,
+          selected: f.id === selectedFeatureId,
+          active: (f.properties.windSpeedKmh || 0) >= 118,
+          __feature: f,
+        }))
+      )
     );
   }
 
@@ -347,10 +271,8 @@ export function createDisasterLayers({
 // ANIMATED PHENOMENA
 // Driven from MapCanvas' RAF loop; `time` is seconds since map load. These are
 // composed on top of createDisasterLayers() every tick and never trigger React.
+// Everything here is a 1px hairline stepping through 4 discrete alphas.
 // ===========================
-const CYAN: [number, number, number] = [34, 211, 238];
-const VIOLET: [number, number, number] = [168, 85, 247];
-
 interface AnimatedLayersProps {
   earthquakes: DisasterFeature[];
   hotspots: DisasterFeature[];
@@ -358,11 +280,6 @@ interface AnimatedLayersProps {
   layerVisibility: LayerVisibility;
   time: number;
   selectedFeatureId?: string | null;
-}
-
-function pointOf(f: DisasterFeature): [number, number] {
-  const c = f.geometry.coordinates;
-  return Array.isArray(c) && typeof c[0] === 'number' ? (c as [number, number]) : [0, 0];
 }
 
 // Arc of a circle in degrees, longitude corrected for latitude.
@@ -411,20 +328,18 @@ export function createAnimatedLayers({
 }: AnimatedLayersProps): Array<any> {
   const layers: Array<any> = [];
 
-  // (a) Seismic shockwave: 3 expanding rings per mag>=6 quake.
+  // (a) Seismic shockwave: 3 expanding hairlines per mag>=6 quake.
   if (layerVisibility.earthquakes && earthquakes.length > 0) {
     const major = earthquakes.filter((f) => (f.properties.magnitude || 0) >= 6.0);
     if (major.length > 0) {
       const data = major.flatMap((f) => {
         const [lng, lat] = pointOf(f);
         const mag = f.properties.magnitude || 6;
-        const rgb = (f.properties.depth || 10) < 70 ? CYAN : VIOLET;
         return [0, 1, 2].map((i) => {
           const phase = (time * 0.22 + i / 3) % 1;
           return {
             path: ringPath(lat, lng, mag * 0.3 * (0.3 + phase * 1.5), 0, 360, 40),
-            color: [...rgb, Math.round((1 - phase) * 190)] as [number, number, number, number],
-            width: 2.5 - phase * 1.2,
+            color: [...RED, STEPS[Math.min(3, Math.floor(phase * 4))]] as RGBA,
           };
         });
       });
@@ -434,33 +349,31 @@ export function createAnimatedLayers({
           data,
           getPath: (d: any) => d.path,
           getColor: (d: any) => d.color,
-          getWidth: (d: any) => d.width,
+          getWidth: 1,
           widthUnits: 'pixels',
           widthMinPixels: 1,
-          widthMaxPixels: 3,
-          capRounded: true,
-          jointRounded: true,
+          widthMaxPixels: 1,
+          capRounded: false,
+          jointRounded: false,
           pickable: false,
         })
       );
     }
   }
 
-  // (b) Cyclogenesis vortex + pulsing dashed forecast track.
+  // (b) Cyclogenesis vortex + stepping forecast track.
   if (layerVisibility.cyclones && cyclones.length > 0) {
     const vortex = cyclones.flatMap((f, ci) => {
       const [lng, lat] = pointOf(f);
       const spin = time * 0.5 + ci;
-      return [0, 1].flatMap((r) => {
-        const rgb = r === 0 ? VIOLET : CYAN;
-        return dashedRing(lat, lng, 0.55 + r * 0.45, 8, 0.55, spin * (r === 0 ? 1 : -1)).map(
-          (path) => ({
+      return [0, 1].flatMap((r) =>
+        dashedRing(lat, lng, 0.55 + r * 0.45, 8, 0.55, spin * (r === 0 ? 1 : -1)).map(
+          (path, k) => ({
             path,
-            color: [...rgb, r === 0 ? 210 : 170] as [number, number, number, number],
-            width: 2,
+            color: [...WHITE, STEPS[(k + Math.floor(time * 4)) % 4]] as RGBA,
           })
-        );
-      });
+        )
+      );
     });
     if (vortex.length > 0) {
       layers.push(
@@ -469,15 +382,17 @@ export function createAnimatedLayers({
           data: vortex,
           getPath: (d: any) => d.path,
           getColor: (d: any) => d.color,
-          getWidth: (d: any) => d.width,
+          getWidth: 1,
           widthUnits: 'pixels',
-          capRounded: true,
+          widthMinPixels: 1,
+          widthMaxPixels: 1,
+          capRounded: false,
           pickable: false,
         })
       );
     }
 
-    const pulse = 0.45 + 0.4 * Math.sin(time * 3);
+    const trackAlpha = STEPS[Math.floor(time * 4) % 4];
     const track = cyclones.flatMap((f) => {
       const pts = ((f.properties as any).forecastTrack || []) as Array<{ lat: number; lng: number }>;
       if (pts.length === 0) return [];
@@ -492,7 +407,7 @@ export function createAnimatedLayers({
             [all[i].lng, all[i].lat],
             [all[i + 1].lng, all[i + 1].lat],
           ],
-          color: [...VIOLET, Math.round(pulse * 255)] as [number, number, number, number],
+          color: [...WHITE, trackAlpha] as RGBA,
         });
       }
       return segs;
@@ -504,9 +419,10 @@ export function createAnimatedLayers({
           data: track,
           getPath: (d: any) => d.path,
           getColor: (d: any) => d.color,
-          getWidth: 2,
+          getWidth: 1,
           widthUnits: 'pixels',
-          capRounded: true,
+          widthMinPixels: 1,
+          widthMaxPixels: 1,
           pickable: false,
         })
       );
@@ -521,7 +437,7 @@ export function createAnimatedLayers({
           const phase = (time * 0.35 + offset) % 1;
           return {
             path: ringPath(lat, lng, 0.35 + phase * 0.9, 0, 360, 32),
-            color: [...CYAN, Math.round((1 - phase) * 150)] as [number, number, number, number],
+            color: [...SKY, STEPS[Math.min(3, Math.floor(phase * 4))]] as RGBA,
           };
         });
       });
@@ -531,44 +447,93 @@ export function createAnimatedLayers({
           data: rings,
           getPath: (d: any) => d.path,
           getColor: (d: any) => d.color,
-          getWidth: 1.5,
+          getWidth: 1,
           widthUnits: 'pixels',
+          widthMinPixels: 1,
+          widthMaxPixels: 1,
           pickable: false,
         })
       );
     }
   }
 
-  // (c) Thermal flicker: radius +/-15% and opacity modulated per feature.
+  // (c) Thermal: 2-state square blink, no radius breathe. Squares are fixed
+  // degrees so the marker stays a hard-edged pixel block, not a soft dot.
   if (layerVisibility.hotspots && hotspots.length > 0) {
+    const HALF_DEG = 0.09;
+    const square = (lng: number, lat: number) => {
+      const lngHalf = HALF_DEG / (Math.cos((lat * Math.PI) / 180) || 1);
+      return [
+        [lng - lngHalf, lat - HALF_DEG],
+        [lng + lngHalf, lat - HALF_DEG],
+        [lng + lngHalf, lat + HALF_DEG],
+        [lng - lngHalf, lat + HALF_DEG],
+        [lng - lngHalf, lat - HALF_DEG],
+      ];
+    };
+
+    const data = hotspots.map((f, idx) => {
+      const brightness = f.properties.brightness || 300;
+      const [lng, lat] = pointOf(f);
+      const on = Math.floor(time * 2 + idx * 0.5) % 2 === 0;
+      return {
+        polygon: square(lng, lat),
+        position: [lng, lat] as [number, number],
+        color: (f.id === selectedFeatureId ? [...WHITE, 255] : [...AMBER, on ? 255 : 90]) as RGBA,
+        active: brightness > 330,
+        selected: f.id === selectedFeatureId,
+        __feature: f,
+      };
+    });
+
     layers.push(
-      new ScatterplotLayer({
+      new PolygonLayer({
         id: 'hotspots',
-        data: hotspots.map((f, idx) => {
-          const brightness = f.properties.brightness || 300;
-          const base = Math.max(4, Math.min(24, (brightness - 250) / 8));
-          const wobble = Math.sin(time * 2 + idx * 1.7);
-          const baseColor = brightness > 330 ? [255, 68, 68] : brightness > 310 ? [255, 136, 0] : [255, 170, 0];
-          const color =
-            f.id === selectedFeatureId
-              ? [255, 255, 0, 255]
-              : [...baseColor, Math.round(190 + wobble * 30)];
-          return {
-            ...f,
-            radius: base * (1 + wobble * 0.15),
-            color,
-            __feature: f,
-          };
-        }),
-        getPosition: (d: any) => d.geometry.coordinates,
-        getRadius: (d: any) => d.radius,
+        data,
+        getPolygon: (d: any) => d.polygon,
         getFillColor: (d: any) => d.color,
         pickable: true,
-        radiusMinPixels: 4,
-        radiusMaxPixels: 30,
+        filled: true,
+        stroked: false,
+      })
+    );
+    layers.push(
+      new ScatterplotLayer({
+        id: 'hotspot-rings',
+        data,
+        getPosition: (d: any) => d.position,
+        getRadius: 11,
+        radiusUnits: 'pixels',
+        radiusMinPixels: 11,
+        radiusMaxPixels: 11,
+        getLineColor: (d: any) =>
+          (d.selected ? [...WHITE, 255] : [...AMBER, 200]) as RGBA,
+        getLineWidth: (d: any) => (d.selected ? 2 : 1.5),
+        lineWidthUnits: 'pixels',
+        lineWidthMinPixels: 1.5,
+        lineWidthMaxPixels: 2,
         stroked: true,
-        getLineColor: [255, 255, 255, 120],
+        filled: false,
+        pickable: false,
+      })
+    );
+    layers.push(
+      new ScatterplotLayer({
+        id: 'hotspot-ticks',
+        data: data.filter((d) => d.active),
+        getPosition: (d: any) => d.position,
+        getRadius: 18,
+        radiusUnits: 'pixels',
+        radiusMinPixels: 18,
+        radiusMaxPixels: 18,
+        getLineColor: [...AMBER, 140] as RGBA,
         getLineWidth: 1,
+        lineWidthUnits: 'pixels',
+        lineWidthMinPixels: 1,
+        lineWidthMaxPixels: 1,
+        stroked: true,
+        filled: false,
+        pickable: false,
       })
     );
   }
@@ -607,7 +572,7 @@ export function createLockOnLayer({
         [cx, cy],
         [cx, cy - sy * size * arm],
       ],
-      color: [...CYAN, alpha] as [number, number, number, number],
+      color: [...WHITE, alpha] as RGBA,
     };
   });
   return [
@@ -616,10 +581,12 @@ export function createLockOnLayer({
       data,
       getPath: (d: any) => d.path,
       getColor: (d: any) => d.color,
-      getWidth: 2,
+      getWidth: 1.5,
       widthUnits: 'pixels',
-      capRounded: true,
-      jointRounded: true,
+      widthMinPixels: 1.5,
+      widthMaxPixels: 1.5,
+      capRounded: false,
+      jointRounded: false,
       pickable: false,
     }),
   ];

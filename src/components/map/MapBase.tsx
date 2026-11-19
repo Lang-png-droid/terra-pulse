@@ -11,6 +11,80 @@ import type { FeatureCollection, Feature, Polygon, MultiPolygon, LineString } fr
 // Primary CartoDB dark-matter style URL
 const CARTODB_DARK_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
+// Brutalist technical-grid palette. CartoDB dark-matter layer ids verified
+// against the live style JSON (95 layers): background, landcover, landuse*,
+// park_*, water, water_shadow, waterway, boundary_*, road_*/tunnel_*/bridge_*/rail*,
+// building*, plus 27 `symbol` layers (place_*, watername_*, roadname_*, poi_*,
+// housenumber). There is no `coastline` layer - the coast is the water fill edge,
+// so #000000 ocean against #111111 land is itself the coastline.
+const GRID_OCEAN = '#000000';
+const GRID_LAND = '#111111';
+const GRID_LINE = '#2E2E2E';
+const GRID_LABEL = '#71717A';
+
+const LAND_IDS = [
+  'landcover',
+  'park_national_park',
+  'park_nature_reserve',
+  'landuse_residential',
+  'landuse',
+  'building',
+  'building-top',
+];
+const LINE_IDS = [
+  'waterway',
+  'boundary_county',
+  'boundary_state',
+  'boundary_country_outline',
+  'boundary_country_inner',
+];
+
+// Re-tint the live basemap into a black-on-charcoal technical grid. Every paint
+// call is guarded by getLayer(), so a style that lacks an id is simply skipped.
+export function applyBrutalistBasemap(map: MapLibreMap) {
+  if (!map.getStyle()) return;
+
+  const paint = (id: string, props: Record<string, unknown>) => {
+    if (!map.getLayer(id)) return;
+    for (const [key, value] of Object.entries(props)) {
+      try {
+        map.setPaintProperty(id, key, value as never);
+      } catch {
+        // A property the layer does not support is not fatal.
+      }
+    }
+  };
+
+  paint('background', { 'background-color': GRID_OCEAN });
+  paint('water', { 'fill-color': GRID_OCEAN });
+  paint('water_shadow', { 'fill-color': GRID_OCEAN });
+  for (const id of LAND_IDS) paint(id, { 'fill-color': GRID_LAND });
+  for (const id of LINE_IDS) paint(id, { 'line-color': GRID_LINE });
+  const handled = new Set(['background', 'water', 'water_shadow', ...LAND_IDS, ...LINE_IDS]);
+
+  // Everything else is street furniture or labels: roads, tunnels, bridges and
+  // rail collapse into the grid line colour so the map reads as a survey grid.
+  for (const layer of map.getStyle().layers ?? []) {
+    if (handled.has(layer.id)) continue;
+    if (layer.type === 'symbol') {
+      paint(layer.id, {
+        'text-color': GRID_LABEL,
+        'text-halo-color': GRID_OCEAN,
+        'text-opacity': 0.55,
+        'icon-opacity': 0.4,
+      });
+      continue;
+    }
+    if (layer.type === 'line') {
+      paint(layer.id, { 'line-color': GRID_LINE });
+      continue;
+    }
+    if (layer.type === 'fill') {
+      paint(layer.id, { 'fill-color': GRID_LAND });
+    }
+  }
+}
+
 // Simplified Indonesia archipelago GeoJSON (coastline polygons)
 const INDONESIA_GEOJSON: FeatureCollection<Polygon | MultiPolygon> = {
   type: 'FeatureCollection',
@@ -44,7 +118,7 @@ const SCANLINE_GEOJSON: FeatureCollection<LineString> = {
   } as Feature<LineString>)))
 };
 
-// Fallback custom style spec with #050507 ocean, #16181D land, #2E323D coastlines/boundaries
+// Fallback custom style spec with #000000 ocean, #111111 land, #2E2E2E coastlines/boundaries
 const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
   name: 'TerraPulse Monochrome Dark',
@@ -67,7 +141,7 @@ const FALLBACK_STYLE: StyleSpecification = {
     {
       id: 'background',
       type: 'background',
-      paint: { 'background-color': '#050507' },
+      paint: { 'background-color': '#000000' },
     },
     // Ambient orbital scanline grid (very subtle)
     {
@@ -75,7 +149,7 @@ const FALLBACK_STYLE: StyleSpecification = {
       type: 'line',
       source: 'scanline-grid',
       paint: {
-        'line-color': '#1A1D24',
+        'line-color': '#141414',
         'line-width': 0.5,
         'line-opacity': 0.15,
       },
@@ -86,7 +160,7 @@ const FALLBACK_STYLE: StyleSpecification = {
       type: 'line',
       source: 'scanline-grid',
       paint: {
-        'line-color': '#1A1D24',
+        'line-color': '#141414',
         'line-width': 0.5,
         'line-opacity': 0.08,
       },
@@ -98,7 +172,7 @@ const FALLBACK_STYLE: StyleSpecification = {
       type: 'fill',
       source: 'indonesia-boundaries',
       paint: {
-        'fill-color': '#16181D',
+        'fill-color': '#111111',
         'fill-opacity': 1,
         'fill-antialias': true,
       },
@@ -108,7 +182,7 @@ const FALLBACK_STYLE: StyleSpecification = {
       type: 'line',
       source: 'indonesia-boundaries',
       paint: {
-        'line-color': '#2E323D',
+        'line-color': '#2E2E2E',
         'line-width': 2,
         'line-opacity': 0.9,
       },
@@ -120,35 +194,35 @@ const FALLBACK_STYLE: StyleSpecification = {
       source: 'osm',
       'source-layer': 'landuse',
       filter: ['in', 'class', 'park', 'wood', 'forest', 'nature_reserve'],
-      paint: { 'fill-color': '#16181D', 'fill-opacity': 1 },
+      paint: { 'fill-color': '#111111', 'fill-opacity': 1 },
     },
     {
       id: 'water',
       type: 'fill',
       source: 'osm',
       'source-layer': 'water',
-      paint: { 'fill-color': '#050507', 'fill-opacity': 1 },
+      paint: { 'fill-color': '#000000', 'fill-opacity': 1 },
     },
     {
       id: 'waterway',
       type: 'line',
       source: 'osm',
       'source-layer': 'waterway',
-      paint: { 'line-color': '#2E323D', 'line-width': 1 },
+      paint: { 'line-color': '#2E2E2E', 'line-width': 1 },
     },
     {
       id: 'coastline',
       type: 'line',
       source: 'osm',
       'source-layer': 'coastline',
-      paint: { 'line-color': '#2E323D', 'line-width': 1.5 },
+      paint: { 'line-color': '#2E2E2E', 'line-width': 1.5 },
     },
     {
       id: 'admin-boundaries',
       type: 'line',
       source: 'osm',
       'source-layer': 'admin',
-      paint: { 'line-color': '#2E323D', 'line-width': 1, 'line-opacity': 0.5 },
+      paint: { 'line-color': '#2E2E2E', 'line-width': 1, 'line-opacity': 0.5 },
     },
     {
       id: 'country-label',
@@ -160,7 +234,7 @@ const FALLBACK_STYLE: StyleSpecification = {
         'text-font': ['Noto Sans Regular'],
         'text-size': 12,
       },
-      paint: { 'text-color': '#71717A', 'text-halo-color': '#050507', 'text-halo-width': 1 },
+      paint: { 'text-color': '#71717A', 'text-halo-color': '#000000', 'text-halo-width': 1 },
     },
   ],
 };
@@ -231,6 +305,8 @@ export function MapBase({
     } as MapOptions);
 
     const handleStyleLoad = () => {
+      // A basemap style swap must never revert the technical-grid palette.
+      applyBrutalistBasemap(map);
       setStyleLoaded(true);
       setMapLoaded(true);
       callbacksRef.current.onStyleLoad?.();

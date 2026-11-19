@@ -73,6 +73,50 @@ function updateRainRadarLayer(map: maplibregl.Map, tileUrl: string, visible: boo
   }
 }
 
+// Subset of deck.gl's PickingInfo the callout needs; avoids depending on
+// @deck.gl/core directly (it is only a transitive dependency here).
+interface HoverInfo {
+  picked: boolean;
+  object: unknown;
+  x: number;
+  y: number;
+}
+
+// NASA-style instrument callout: event code + metric on line 1, place on line 2.
+const TYPE_CODE: Record<string, string> = {
+  earthquake: 'EQ',
+  volcano: 'VOL',
+  hotspot: 'HOT',
+  cyclone: 'CYC',
+  flood: 'FLD',
+  tsunami: 'TSN',
+  storm: 'STM',
+};
+
+function calloutText(f: DisasterFeature): string {
+  const p = f.properties;
+  const code = TYPE_CODE[p.type] || 'EVT';
+  let metric: string;
+  switch (p.type) {
+    case 'earthquake':
+      metric = `M${(p.magnitude ?? 0).toFixed(1)}`;
+      break;
+    case 'volcano':
+      metric = `RADIUS ${p.hazardRadiusKm ?? 0} km`;
+      break;
+    case 'hotspot':
+      metric = `CONF ${Math.round(p.confidence ?? 0)}%`;
+      break;
+    case 'cyclone':
+      metric = `WIND ${p.windSpeedKmh ?? 0} km/h`;
+      break;
+    default:
+      metric = p.type.toUpperCase();
+  }
+  const place = (p.title || '').slice(0, 34).trim();
+  return `${code} ${metric}\n${place}`;
+}
+
 export function MapCanvas({
   earthquakes,
   hotspots,
@@ -179,6 +223,36 @@ export function MapCanvas({
   // 'style.load', so a mapLoaded-driven effect may never see mapRef set).
   const clickHandlerRef = useRef<(e: maplibregl.MapMouseEvent) => void>(() => {});
 
+  // Hover callout. Every pointer move mutates this node's style/textContent
+  // directly; no React state is touched, so hovering never re-renders the tree.
+  const calloutRef = useRef<HTMLDivElement>(null);
+  const handleHover = useCallback((info: HoverInfo) => {
+    const el = calloutRef.current;
+    const map = mapRef.current;
+    if (!el || !isMapUsable(map)) return;
+
+    const feature = (info.object as { __feature?: DisasterFeature } | undefined)?.__feature;
+    if (!info.picked || !feature) {
+      if (el.style.display !== 'none') el.style.display = 'none';
+      if (map.getCanvas().style.cursor !== '') map.getCanvas().style.cursor = '';
+      return;
+    }
+
+    const rect = map.getCanvas().getBoundingClientRect();
+    const W = 200;
+    const H = 36;
+    let left = rect.left + info.x + 12;
+    let top = rect.top + info.y + 12;
+    // Flip to the other side of the cursor rather than clip at the edge.
+    if (left + W > window.innerWidth) left = rect.left + info.x - W - 12;
+    if (top + H > window.innerHeight) top = rect.top + info.y - H - 12;
+    el.style.left = `${Math.max(0, left)}px`;
+    el.style.top = `${Math.max(0, top)}px`;
+    el.textContent = calloutText(feature);
+    if (el.style.display !== 'block') el.style.display = 'block';
+    map.getCanvas().style.cursor = 'pointer';
+  }, []);
+
   // Handle MapBase events
   const handleMapLoad = useCallback((map: maplibregl.Map) => {
     mapRef.current = map;
@@ -189,6 +263,8 @@ export function MapCanvas({
     const overlay = new MapboxOverlay({
       interleaved: true,
       layers: layersRef.current,
+      // Stable wrapper: a fresh closure per frame would churn the Deck instance.
+      onHover: (info) => handleHover(info as HoverInfo),
     });
     map.addControl(overlay);
     overlayRef.current = overlay;
@@ -199,7 +275,7 @@ export function MapCanvas({
     if (isMapUsable(map) && tiles.length > 0 && rainRadarVisibleRef.current) {
       addRainRadarLayer(map, tiles[0]);
     }
-  }, []);
+  }, [handleHover]);
 
   const handleStyleLoad = useCallback(() => {
     setMapLoaded(true);
@@ -295,7 +371,15 @@ export function MapCanvas({
       onMapLoad={handleMapLoad}
       onStyleLoad={handleStyleLoad}
       initialViewport={INITIAL_VIEWPORT}
-    />
+    >
+      {/* Fixed-position callout: mutated imperatively by handleHover. */}
+      <div
+        ref={calloutRef}
+        aria-hidden="true"
+        style={{ display: 'none' }}
+        className="pointer-events-none fixed z-20 border-l-2 border-white bg-black/95 px-2 py-1 font-mono text-[10px] leading-tight whitespace-pre text-white tabular-nums"
+      />
+    </MapBase>
   );
 }
 
