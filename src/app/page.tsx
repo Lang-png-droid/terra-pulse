@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapCanvas } from '@/components/map/MapCanvas';
-import { TopBar } from '@/components/hud/TopBar';
-import { LayerControl } from '@/components/hud/LayerControl';
-import { EventBottomSheet } from '@/components/hud/EventBottomSheet';
-import { TimelineScrubber } from '@/components/hud/TimelineScrubber';
+import { TelemetryStrip } from '@/components/hud/TelemetryStrip';
+import { LayerPanel } from '@/components/hud/LayerPanel';
+import { EventCard } from '@/components/hud/EventCard';
+import { TimelineBar } from '@/components/hud/TimelineBar';
+import { BrandLockup, type ViewMode } from '@/components/hud/BrandLockup';
+import { NewsPanel } from '@/components/hud/NewsPanel';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import {
   DisasterFeature,
@@ -38,24 +40,28 @@ export default function HomePage() {
   const [rainRadarTiles, setRainRadarTiles] = useState<string[]>([]);
   const [windGrid, setWindGrid] = useState<any>(null);
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
+  const [newsError, setNewsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('PETA');
 
   // UI state
   const [viewport, setViewport] = useState(INITIAL_VIEWPORT);
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>(DEFAULT_LAYER_VISIBILITY);
   const [selectedFeature, setSelectedFeature] = useState<DisasterFeature | null>(null);
-  const [activeTab, setActiveTab] = useState<'map' | 'news'>('map');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [showNearby, setShowNearby] = useState(false);
 
-  // Timeline state
-  const [timelineState, setTimelineState] = useState<TimelineState>({
-    currentTime: Date.now(),
-    startTime: Date.now() - 24 * 3600000,
-    endTime: Date.now() + 48 * 3600000,
-    stepHours: 3,
-    isPlaying: false,
-    speed: 1,
+  // Timeline state — one `now` for all three so the derived progress is exactly 1/3 on both
+  // server and client (separate Date.now() calls made SSR/client styles diverge → #418).
+  const [timelineState, setTimelineState] = useState<TimelineState>(() => {
+    const now = Date.now();
+    return {
+      currentTime: now,
+      startTime: now - 24 * 3600000,
+      endTime: now + 48 * 3600000,
+      stepHours: 3,
+      isPlaying: false,
+      speed: 1,
+    };
   });
 
   // Tsunami simulation
@@ -73,18 +79,23 @@ export default function HomePage() {
 
     setLoading(true);
     try {
-      const [eqRes, hsRes, volRes, wxRes, newsRes] = await Promise.allSettled([
-        fetch('/api/earthquakes', { signal, next: { revalidate: 60 } }),
+      // Fetch earthquakes first (primary data)
+      const eqRes = await fetch('/api/earthquakes', { signal, next: { revalidate: 60 } });
+      if (eqRes.ok) {
+        const data: DisasterFeatureCollection = await eqRes.json();
+        setEarthquakes(data.features);
+      }
+      // Hide loading once primary data (earthquakes) loads
+      setLoading(false);
+
+      // Fetch remaining data in parallel (non-blocking)
+      const [hsRes, volRes, wxRes, newsRes] = await Promise.allSettled([
         fetch('/api/hotspots', { signal, next: { revalidate: 300 } }),
         fetch('/api/volcanoes', { signal, next: { revalidate: 300 } }),
         fetch('/api/weather', { signal, next: { revalidate: 120 } }),
         fetch('/api/news', { signal, next: { revalidate: 300 } }),
       ]);
 
-      if (eqRes.status === 'fulfilled' && eqRes.value.ok) {
-        const data: DisasterFeatureCollection = await eqRes.value.json();
-        setEarthquakes(data.features);
-      }
       if (hsRes.status === 'fulfilled' && hsRes.value.ok) {
         const data: DisasterFeatureCollection = await hsRes.value.json();
         setHotspots(data.features);
@@ -95,19 +106,21 @@ export default function HomePage() {
       }
       if (wxRes.status === 'fulfilled' && wxRes.value.ok) {
         const data = await wxRes.value.json();
-        if (data.rainRadar?.length) setRainRadarTiles(data.rainRadar.map((r: any) => r.path));
-        if (data.windGrid) setWindGrid(data.windGrid);
+        if (data.radar?.length) setRainRadarTiles(data.radar.map((r: any) => r.path));
+        if (data.weather) setWindGrid(data.weather);
         if (data.cyclones?.features?.length) setCyclones(data.cyclones.features);
       }
       if (newsRes.status === 'fulfilled' && newsRes.value.ok) {
         const data = await newsRes.value.json();
         setNewsArticles(data.articles || []);
+        setNewsError(null);
+      } else {
+        setNewsError('Gagal memuat berita');
       }
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
         console.error('Fetch error:', err);
       }
-    } finally {
       setLoading(false);
     }
   }, []);
@@ -158,7 +171,6 @@ export default function HomePage() {
   const handleNearMe = useCallback((lat: number, lng: number) => {
     setUserLocation({ lat, lng });
     setViewport((v) => ({ ...v, latitude: lat, longitude: lng, zoom: 8 }));
-    setShowNearby(true);
   }, []);
 
   // Handle feature click
@@ -210,15 +222,20 @@ export default function HomePage() {
     setTimelineState((s) => ({ ...s, speed }));
   }, []);
 
-  // Tsunami rings for map
-  const tsunamiRings = showTsunami && tsunamiSimulation ? tsunamiSimulation.rings : [];
+  // HUD mode switch (PETA / BERITA) — opening the news drawer closes the event card
+  const handleModeChange = useCallback((next: ViewMode) => {
+    setViewMode(next);
+    if (next === 'BERITA') setSelectedFeature(null);
+  }, []);
 
+  // Tsunami polygons for map (pre-positioned at epicenter)
+  const tsunamiPolygons = showTsunami && tsunamiSimulation ? tsunamiSimulation.polygons : [];
   // Check if we have time-based data
   const hasCycloneData = cyclones.length > 0;
   const hasTsunamiData = showTsunami && tsunamiSimulation !== null;
 
   return (
-    <div className="relative w-full h-[100dvh] bg-zinc-950 overflow-hidden">
+    <div className="relative w-full h-[100dvh] bg-tp-bg overflow-hidden">
       {/* Map Canvas */}
       <MapCanvas
         earthquakes={earthquakes}
@@ -227,7 +244,7 @@ export default function HomePage() {
         cyclones={cyclones}
         rainRadarTiles={rainRadarTiles}
         windGrid={windGrid}
-        tsunamiRings={tsunamiRings}
+        tsunamiPolygons={tsunamiPolygons}
         layerVisibility={layerVisibility}
         viewport={viewport}
         onViewportChange={setViewport}
@@ -236,72 +253,88 @@ export default function HomePage() {
         timelineTime={timelineState.currentTime}
       />
 
-      {/* Top Bar */}
-      <TopBar
-        activeDisasters={allDisasters}
-        newsArticles={newsArticles}
-        onSearch={handleSearch}
-        onNearMe={handleNearMe}
-        onTabChange={setActiveTab}
-        activeTab={activeTab}
-        userLocation={userLocation}
-        loading={loading}
-      />
+      {/* PETA HUD cluster (hidden in BERITA mode) */}
+      <div id="panel-peta" role="tabpanel" aria-labelledby="tab-peta" hidden={viewMode !== 'PETA'}>
+        {/* Telemetry Strip (Top) */}
+        <TelemetryStrip
+          activeDisasters={allDisasters}
+          onCenterMap={handleCenterMap}
+          onRefresh={fetchAllData}
+          onSearch={handleSearch}
+          onNearMe={handleNearMe}
+          loading={loading}
+        />
 
-      {/* Layer Control */}
-      <LayerControl
-        visibility={layerVisibility}
-        onVisibilityChange={setLayerVisibility}
-        isMobile={isMobile}
-        disasterCounts={disasterCounts}
-      />
+        {/* Layer Panel */}
+        <LayerPanel
+          visibility={layerVisibility}
+          onVisibilityChange={setLayerVisibility}
+          isMobile={isMobile}
+          disasterCounts={disasterCounts}
+        />
 
-      {/* Event Bottom Sheet */}
-      <EventBottomSheet
-        feature={selectedFeature}
-        userLocation={userLocation}
-        onClose={() => setSelectedFeature(null)}
-        onSimulateTsunami={handleSimulateTsunami}
-        onCenterMap={handleCenterMap}
-        isMobile={isMobile}
-      />
+        {/* Event Card (Bottom Sheet) */}
+        <EventCard
+          feature={selectedFeature}
+          userLocation={userLocation}
+          onClose={() => setSelectedFeature(null)}
+          onSimulateTsunami={handleSimulateTsunami}
+          onCenterMap={handleCenterMap}
+          isMobile={isMobile}
+        />
 
-      {/* Timeline Scrubber */}
-      <TimelineScrubber
-        currentTime={timelineState.currentTime}
-        startTime={timelineState.startTime}
-        endTime={timelineState.endTime}
-        stepHours={timelineState.stepHours}
-        isPlaying={timelineState.isPlaying}
-        speed={timelineState.speed}
-        onTimeChange={handleTimeChange}
-        onPlayPause={handlePlayPause}
-        onSpeedChange={handleSpeedChange}
-        isMobile={isMobile}
-        hasCycloneData={hasCycloneData}
-        hasTsunamiData={hasTsunamiData}
-      />
+        {/* Timeline Bar (Bottom Center) */}
+        <TimelineBar
+          currentTime={timelineState.currentTime}
+          startTime={timelineState.startTime}
+          endTime={timelineState.endTime}
+          stepHours={timelineState.stepHours}
+          isPlaying={timelineState.isPlaying}
+          speed={timelineState.speed}
+          onTimeChange={handleTimeChange}
+          onPlayPause={handlePlayPause}
+          onSpeedChange={handleSpeedChange}
+          isMobile={isMobile}
+          hasCycloneData={hasCycloneData}
+          hasTsunamiData={hasTsunamiData}
+        />
+      </div>
 
-      {/* Mobile: Show nearby toggle when not in news tab */}
-      {isMobile && activeTab === 'map' && userLocation && !showNearby && allDisasters.length > 0 && (
-        <button
-          onClick={() => setShowNearby(true)}
-          className="fixed bottom-28 right-4 z-40 px-3 py-2 bg-zinc-900/80 backdrop-blur-md border border-zinc-700 rounded-full shadow-lg text-sm text-zinc-200 hover:bg-zinc-800 transition-colors min-h-[44px] flex items-center gap-1"
-        >
-          📍 Terdekat
-        </button>
-      )}
+      {/* Brand Lockup + mode tabs (Bottom Left, desktop) */}
+      <BrandLockup mode={viewMode} onModeChange={handleModeChange} />
+
+      {/* News drawer (BERITA mode) — stays mounted so aria-controls resolves in both modes */}
+      <div hidden={viewMode !== 'BERITA'}>
+        <NewsPanel
+          articles={newsArticles}
+          loading={loading}
+          error={newsError}
+          onClose={() => handleModeChange('PETA')}
+          onCenterMap={handleCenterMap}
+        />
+      </div>
+
+      {/* News toggle (mobile only — BrandLockup is desktop-only) */}
+      <button
+        onClick={() => handleModeChange(viewMode === 'BERITA' ? 'PETA' : 'BERITA')}
+        className="fixed top-14 right-4 z-40 md:hidden tp-panel rounded-full shadow-lg tp-label text-tp-cyan flex items-center gap-2 px-3 min-h-[44px]"
+        aria-label={viewMode === 'BERITA' ? 'Tutup panel berita' : 'Buka panel berita'}
+        aria-expanded={viewMode === 'BERITA'}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <path d="M4 5h16v14H4z" />
+          <path d="M8 9h8M8 13h5" />
+        </svg>
+        BERITA
+      </button>
 
       {/* Loading indicator */}
       {loading && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 border border-zinc-700 px-4 py-2 rounded-full text-sm text-zinc-300 flex items-center gap-2">
-          <span className="animate-spin">⟳</span>
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 tp-panel-strong rounded-full px-4 py-2 tp-body text-tp-text flex items-center gap-2">
+          <span className="animate-spin text-tp-cyan">⟳</span>
           Memuat data bencana...
         </div>
       )}
-
-      {/* PWA Install Prompt (simple) */}
-      {/* Could add beforeinstallprompt handler here */}
     </div>
   );
 }
