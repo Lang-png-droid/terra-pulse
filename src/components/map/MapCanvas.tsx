@@ -6,8 +6,8 @@ import maplibregl from 'maplibre-gl';
 import { DisasterFeature, LayerVisibility, MapViewport } from '@/types/disaster';
 import { WindGridData } from '@/lib/normalizers';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
-import { MapBase, ViewportState } from './MapBase';
-import { createDisasterLayers } from './DisasterLayers';
+import { MapBase } from './MapBase';
+import { createAnimatedLayers, createDisasterLayers, createLockOnLayer } from './DisasterLayers';
 import { createWindLayer } from './WindLayer';
 import { createTsunamiLayer, TsunamiPolygon } from './TsunamiLayer';
 
@@ -25,6 +25,7 @@ interface MapCanvasProps {
   onFeatureClick: (feature: DisasterFeature) => void;
   selectedFeatureId: string | null;
   timelineTime: number;
+  lockOnTarget?: { lat: number; lng: number; label?: string } | null;
 }
 
 // Module-level so the map-init effect in MapBase never sees a new object.
@@ -51,7 +52,7 @@ function addRainRadarLayer(map: maplibregl.Map, tileUrl: string) {
     type: 'raster',
     tiles: [tileUrl],
     tileSize: 256,
-    maxzoom: 10,
+    maxzoom: 6,
   });
   map.addLayer({
     id: 'rain-radar-layer',
@@ -86,6 +87,7 @@ export function MapCanvas({
   onFeatureClick,
   selectedFeatureId,
   timelineTime,
+  lockOnTarget = null,
 }: MapCanvasProps) {
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -97,12 +99,9 @@ export function MapCanvas({
   const rainRadarVisibleRef = useRef(layerVisibility.rainRadar);
   rainRadarVisibleRef.current = layerVisibility.rainRadar;
 
-  // Create all DeckGL layers - memoized to prevent unnecessary recreation
+  // Static layers only: animated phenomena are composed per frame in applyLayers.
   const layers = useMemo(() => {
-    const allLayers: Array<any> = [];
-
-    // Disaster point layers (earthquakes, hotspots, volcanoes, cyclones)
-    allLayers.push(
+    return [
       ...createDisasterLayers({
         earthquakes,
         hotspots,
@@ -110,29 +109,16 @@ export function MapCanvas({
         cyclones,
         layerVisibility,
         selectedFeatureId,
-      })
-    );
-
-    // Wind particle layer
-    allLayers.push(
+      }),
       ...createWindLayer({
         windGrid,
         layerVisibility,
         maxParticles,
         prefersReducedMotion,
         timelineTime,
-      })
-    );
-
-    // Tsunami isochrone rings
-    allLayers.push(
-      ...createTsunamiLayer({
-        tsunamiPolygons,
-        layerVisibility,
-      })
-    );
-
-    return allLayers;
+      }),
+      ...createTsunamiLayer({ tsunamiPolygons, layerVisibility }),
+    ];
   }, [
     earthquakes,
     hotspots,
@@ -147,10 +133,47 @@ export function MapCanvas({
     timelineTime,
   ]);
 
+  // Latest animation inputs, read by the RAF tick without re-rendering.
+  const animDataRef = useRef({ earthquakes, hotspots, cyclones, layerVisibility, lockOnTarget, selectedFeatureId });
+  animDataRef.current = { earthquakes, hotspots, cyclones, layerVisibility, lockOnTarget, selectedFeatureId };
+  const prefersReducedMotionRef = useRef(prefersReducedMotion);
+  prefersReducedMotionRef.current = prefersReducedMotion;
+  const timeRef = useRef(0);
+
   // Latest layers, read when the overlay is created (map 'load' fires after
   // 'style.load', so the layers effect may already have run and bailed).
   const layersRef = useRef(layers);
   layersRef.current = layers;
+
+  // Single composition path for both the React effect and the RAF tick.
+  // Under reduced motion the clock stays at 0, so phenomena render frozen.
+  const applyLayers = useCallback(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const d = animDataRef.current;
+    const time = timeRef.current;
+    const frozen = prefersReducedMotionRef.current;
+    overlay.setProps({
+      layers: [
+        ...layersRef.current,
+        ...createAnimatedLayers({
+          earthquakes: d.earthquakes,
+          hotspots: d.hotspots,
+          cyclones: d.cyclones,
+          layerVisibility: d.layerVisibility,
+          time,
+          selectedFeatureId: d.selectedFeatureId,
+        }),
+        // Live zoom: the reticle keeps a fixed pixel size across zooms.
+        ...createLockOnLayer({
+          target: d.lockOnTarget,
+          time,
+          frozen,
+          zoom: mapRef.current?.getZoom() ?? 4.5,
+        }),
+      ],
+    });
+  }, []);
 
   // Latest click handler, attached once at map load ('load' can fire after
   // 'style.load', so a mapLoaded-driven effect may never see mapRef set).
@@ -214,12 +237,47 @@ export function MapCanvas({
     }
   }, [onFeatureClick]);
 
-  // Update deck.gl layers via MapboxOverlay when data changes
+  // Push static layer changes through the same composition the RAF tick uses.
+  // lockOnTarget/zoom are listed so the reticle repaints while the clock is frozen.
   useEffect(() => {
-    if (!overlayRef.current || !mapLoaded || !isMapUsable(mapRef.current)) return;
+    if (!mapLoaded || !isMapUsable(mapRef.current)) return;
+    applyLayers();
+  }, [layers, mapLoaded, applyLayers, lockOnTarget, viewport.zoom]);
 
-    overlayRef.current.setProps({ layers });
-  }, [layers, mapLoaded]);
+  // Animation clock: ~24fps, stopped while the tab is hidden or for reduced motion.
+  useEffect(() => {
+    if (!mapLoaded || prefersReducedMotion) {
+      applyLayers(); // frozen at time 0, so reduced motion still renders the phenomena
+      return;
+    }
+    let raf = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (now - last < 41) return; // ~24fps
+      const dt = last === 0 ? 0 : Math.min(now - last, 250); // clamp tab-switch gaps
+      last = now;
+      timeRef.current += dt / 1000;
+      applyLayers();
+    };
+    // visibilitychange stops the loop entirely rather than idling frames.
+    const onVisibility = () => {
+      if (document.hidden) {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+      } else if (!raf) {
+        last = 0; // resync so the clock does not jump after the pause
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    if (!document.hidden) raf = requestAnimationFrame(tick);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+  }, [mapLoaded, prefersReducedMotion, applyLayers]);
 
   // Update rain radar layer when tiles or visibility changes
   useEffect(() => {
