@@ -41,7 +41,7 @@ const SEL = {
   lockup: '[aria-label="TerraPulse brand"]',
   telemetry: '[aria-label="Telemetri sistem"]',
   timelineRoot: '[role="slider"][aria-label="Timeline playback"]',
-  timelinePill: '[role="slider"][aria-label="Timeline playback"] .tp-panel',
+  timelinePill: '[role="slider"][aria-label="Timeline playback"]',
   layerDesktop: '#panel-peta aside',
   layerMobileTrigger: 'button[aria-label="Buka kontrol layer"]',
   eventCardClose: '[aria-label="Tutup detail"]',
