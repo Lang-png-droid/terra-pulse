@@ -5,6 +5,7 @@ import { getDisasterFeatureLngLat } from '@/types/geo';
 import { DisasterFeature, DisasterType } from '@/types/disaster';
 import { haversineDistance, formatDistance } from '@/lib/geoMath';
 import { simulateTsunami } from '@/components/map/TsunamiSimulation';
+import { PanelCorners } from './PanelCorners';
 
 interface EventCardProps {
   feature: DisasterFeature | null;
@@ -170,8 +171,8 @@ export function EventCard({
       ref={sheetRef}
       className={`fixed left-0 right-0 z-40 transition-all duration-300 ${
         isMobile
-          ? 'bottom-[calc(env(safe-area-inset-bottom)_+_56px)] rounded-t-2xl max-h-[calc(85vh_-_env(safe-area-inset-bottom)_-_56px)]'
-          : 'bottom-[68px] xl:bottom-4 left-auto right-4 w-80 rounded-xl max-h-[70vh]'
+          ? 'bottom-[calc(env(safe-area-inset-bottom)_+_56px)] max-h-[calc(85vh_-_env(safe-area-inset-bottom)_-_56px)]'
+          : 'bottom-[68px] xl:bottom-4 left-auto right-4 w-80 max-h-[70vh]'
       }`}
       style={{
         height: expanded ? undefined : isMobile ? '140px' : 'auto',
@@ -191,27 +192,28 @@ export function EventCard({
       )}
 
       {/* Main card */}
-      <div className="tp-panel-strong rounded-t-2xl xl:rounded-xl overflow-hidden flex flex-col tabular-nums">
+      <div className="tp-panel-strong relative flex flex-col overflow-hidden tabular-nums">
+        <PanelCorners />
         {/* Mobile drag handle indicator */}
         {isMobile && (
-          <div className="flex items-center justify-center py-2 bg-tp-surface/50 border-b border-tp-border">
-            <div className="w-10 h-1 rounded-full bg-tp-border" />
+          <div className="flex items-center justify-center border-b border-white/[0.09] py-2">
+            <div className="h-0.5 w-10 bg-white/20" />
           </div>
         )}
         {/* Header / Drag handle */}
-        <div className="flex items-center justify-between p-3 border-b border-tp-border bg-tp-surface/50 min-h-[44px]">
+        <div className="flex min-h-[44px] items-center justify-between border-b border-white/[0.09] px-3 py-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[2px]"
               style={{ background: `${color}20`, color }}
             >
               {TYPE_ICONS[type]}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="tp-title tracking-widest text-tp-text truncate">{TYPE_LABELS[type]}</span>
+                <span className="tp-title truncate tracking-[0.14em] text-tp-text">{TYPE_LABELS[type]}</span>
                 <span
-                  className="tp-badge px-2 py-0.5 rounded-full"
+                  className="px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] tabular-nums"
                   style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
                 >
                   {type === 'earthquake' && props.magnitude ? `M${props.magnitude.toFixed(1)}` :
@@ -219,21 +221,21 @@ export function EventCard({
                    type === 'hotspot' && props.confidence ? `${props.confidence}%` : 'AKTIF'}
                 </span>
               </div>
-              <span className="tp-label text-tp-muted truncate block">
+              <span className="block truncate font-mono text-[10px] text-zinc-500">
                 {props.title || `Lat: ${lat.toFixed(3)}, Lng: ${lng.toFixed(3)}`}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-1">
             {distanceStr && (
-              <span className="tp-label text-tp-cyan px-2 py-0.5 bg-tp-cyan/10 rounded-full flex items-center gap-1 tabular-nums">
+              <span className="flex items-center gap-1 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-tp-cyan">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
                 {distanceStr}
               </span>
             )}
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-tp-surface transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center tp-touch"
+              className="tp-touch rounded-[2px] transition-colors hover:bg-white/[0.06]"
               aria-label="Tutup detail"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-tp-muted">
@@ -247,13 +249,13 @@ export function EventCard({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-3 space-y-4" style={{ maxHeight: isMobile ? 'calc(85vh - 96px - env(safe-area-inset-bottom))' : 'calc(70vh - 120px)' }}>
           {/* Primary metrics — labels over values, no nested boxes */}
-          <div className="border-t border-tp-border pt-3">
+          <div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {type === 'earthquake' && props.magnitude && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">MAGNITUDO</span>
+                  <span className="tp-micro">MAGNITUDO</span>
                   <span
-                    className="tabular-nums font-bold text-[28px] leading-none"
+                    className="tp-metric leading-none"
                     style={{
                       color: getMagnitudeColor(props.magnitude),
                       textShadow: `0 0 12px ${getMagnitudeColor(props.magnitude)}80`,
@@ -265,70 +267,70 @@ export function EventCard({
               )}
               {type === 'earthquake' && props.depth && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">KEDALAMAN</span>
-                  <span className="tp-value tabular-nums text-tp-text">{props.depth} km</span>
+                  <span className="tp-micro">KEDALAMAN</span>
+                  <span className="tp-metric">{props.depth} km</span>
                 </div>
               )}
               {type === 'volcano' && props.alertLevel && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">STATUS</span>
-                  <span className="tp-value" style={{ color: getAlertColor(props.alertLevel) }}>
+                  <span className="tp-micro">STATUS</span>
+                  <span className="tp-metric" style={{ color: getAlertColor(props.alertLevel) }}>
                     {props.alertLevel.toUpperCase()}
                   </span>
                 </div>
               )}
               {type === 'volcano' && props.hazardRadiusKm && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">RADIUS BAHAYA</span>
-                  <span className="tp-value tabular-nums text-tp-text">{props.hazardRadiusKm} km</span>
+                  <span className="tp-micro">RADIUS BAHAYA</span>
+                  <span className="tp-metric">{props.hazardRadiusKm} km</span>
                 </div>
               )}
               {type === 'hotspot' && props.brightness && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">KECERAHAN</span>
-                  <span className="tp-value tabular-nums text-tp-text">{Math.round(props.brightness)} K</span>
+                  <span className="tp-micro">KECERAHAN</span>
+                  <span className="tp-metric">{Math.round(props.brightness)} K</span>
                 </div>
               )}
               {type === 'hotspot' && props.confidence && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">KEPERCAYAAN</span>
-                  <span className="tp-value tabular-nums text-tp-text">{props.confidence}%</span>
+                  <span className="tp-micro">KEPERCAYAAN</span>
+                  <span className="tp-metric">{props.confidence}%</span>
                 </div>
               )}
               {type === 'cyclone' && props.windSpeedKmh && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">KECEPATAN ANGIN</span>
-                  <span className="tp-value tabular-nums text-tp-text">{props.windSpeedKmh} km/h</span>
+                  <span className="tp-micro">KECEPATAN ANGIN</span>
+                  <span className="tp-metric">{props.windSpeedKmh} km/h</span>
                 </div>
               )}
               {type === 'cyclone' && props.pressureHpa && (
                 <div className="flex flex-col">
-                  <span className="tp-label text-tp-muted">TEKANAN</span>
-                  <span className="tp-value tabular-nums text-tp-text">{props.pressureHpa} hPa</span>
+                  <span className="tp-micro">TEKANAN</span>
+                  <span className="tp-metric">{props.pressureHpa} hPa</span>
                 </div>
               )}
               {props.timestamp && (
                 <div className="flex flex-col col-span-2">
-                  <span className="tp-label text-tp-muted">WAKTU</span>
-                  <span className="tp-body text-tp-text font-mono tabular-nums">{formatTime(new Date(props.timestamp).getTime())} WIB</span>
+                  <span className="tp-micro">WAKTU</span>
+                  <span className="tp-metric text-base">{formatTime(new Date(props.timestamp).getTime())} WIB</span>
                 </div>
               )}
               {distanceStr && (
                 <div className="flex flex-col col-span-2">
-                  <span className="tp-label text-tp-muted">JARAK DARI ANDA</span>
-                  <span className="tp-value tabular-nums text-tp-cyan">{distanceStr}</span>
+                  <span className="tp-micro">JARAK DARI ANDA</span>
+                  <span className="tp-metric text-tp-cyan">{distanceStr}</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Coordinates */}
-          <div className="bg-tp-surface/50 border border-tp-border rounded-lg p-3">
-            <span className="tp-label text-tp-muted block">KOORDINAT</span>
+          <div className="border border-white/[0.09] bg-white/[0.02] p-3">
+            <span className="tp-micro block">KOORDINAT</span>
             <div className="flex flex-wrap gap-2 mt-1 tabular-nums">
               <button
                 onClick={() => navigator.clipboard.writeText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`)}
-                className="tp-body text-tp-text font-mono text-xs tabular-nums bg-tp-bg border border-tp-border px-2 py-1 rounded flex items-center gap-1 hover:border-tp-cyan/30 transition-colors min-h-[44px] min-w-[44px] tp-touch"
+                className="tp-touch flex items-center gap-1 rounded-[2px] border border-white/[0.09] bg-[#050507] px-2 py-1 font-mono text-xs tabular-nums text-tp-text transition-colors hover:border-tp-cyan/40"
               >
                 {lat.toFixed(6)}, {lng.toFixed(6)}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -338,7 +340,7 @@ export function EventCard({
               </button>
               <button
                 onClick={() => onCenterMap(lat, lng)}
-                className="tp-body text-tp-cyan text-xs bg-tp-cyan/10 border border-tp-cyan/30 px-2 py-1 rounded flex items-center gap-1 hover:bg-tp-cyan/20 transition-colors min-h-[44px] min-w-[44px] tp-touch"
+                className="tp-touch flex items-center gap-1 rounded-[2px] border border-tp-cyan/30 bg-tp-cyan/10 px-2 py-1 font-mono text-xs text-tp-cyan transition-colors hover:bg-tp-cyan/20"
               >
                 Center
               </button>
@@ -347,13 +349,13 @@ export function EventCard({
 
           {/* Tsunami simulation trigger */}
           {type === 'earthquake' && props.magnitude && props.magnitude >= 6.5 && (props.depth || 0) <= 70 && (
-            <div className="bg-tp-cyan/10 border border-tp-cyan/30 rounded-lg p-3">
-              <span className="tp-label text-tp-cyan flex items-center gap-1 mb-2">
+            <div className="border border-tp-cyan/30 bg-tp-cyan/[0.07] p-3">
+              <span className="mb-2 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.22em] text-tp-cyan">
                 SIMULASI TSUNAMI TERSEDIA
               </span>
               <button
                 onClick={handleTsunamiSimulate}
-                className="w-full py-2 bg-tp-cyan/20 border border-tp-cyan/40 rounded-lg text-tp-cyan tp-body hover:bg-tp-cyan/30 transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[2px] border border-tp-cyan/40 bg-tp-cyan/15 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-cyan transition-colors hover:bg-tp-cyan/25"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -365,27 +367,27 @@ export function EventCard({
 
           {/* Active tsunami simulation display */}
           {showTsunami && tsunamiSimulation && (
-            <div className="bg-tp-violet/10 border border-tp-violet/30 rounded-lg p-3 space-y-2">
-              <span className="tp-label text-tp-violet block">
+            <div className="space-y-2 border border-tp-violet/30 bg-tp-violet/[0.07] p-3">
+              <span className="block font-mono text-[9px] uppercase tracking-[0.22em] text-tp-violet">
                 TSUNAMI SIMULATION ACTIVE
               </span>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
-                  <span className="tp-label text-tp-muted block">MAX RADIUS</span>
-                  <span className="tp-value tabular-nums text-tp-text">{tsunamiSimulation.maxRadiusKm} km</span>
+                  <span className="tp-micro block">MAX RADIUS</span>
+                  <span className="tp-metric text-lg">{tsunamiSimulation.maxRadiusKm} km</span>
                 </div>
                 <div>
-                  <span className="tp-label text-tp-muted block">RINGS</span>
-                  <span className="tp-value tabular-nums text-tp-text">{tsunamiSimulation.rings.length}</span>
+                  <span className="tp-micro block">RINGS</span>
+                  <span className="tp-metric text-lg">{tsunamiSimulation.rings.length}</span>
                 </div>
                 <div>
-                  <span className="tp-label text-tp-muted block">FIRST ETA</span>
-                  <span className="tp-value tabular-nums text-tp-text">{tsunamiSimulation.rings[0]?.etaMinutes || 0} min</span>
+                  <span className="tp-micro block">FIRST ETA</span>
+                  <span className="tp-metric text-lg">{tsunamiSimulation.rings[0]?.etaMinutes || 0} min</span>
                 </div>
               </div>
               <button
                 onClick={() => { setShowTsunami(false); setTsunamiSimulation(null); }}
-                className="w-full py-2 text-tp-violet tp-body hover:text-tp-text transition-colors min-h-[44px] tp-touch"
+                className="tp-touch w-full py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-tp-violet transition-colors hover:text-tp-text"
               >
                 HIDE SIMULATION
               </button>

@@ -49,6 +49,7 @@ export default function HomePage() {
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>(DEFAULT_LAYER_VISIBILITY);
   const [selectedFeature, setSelectedFeature] = useState<DisasterFeature | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [lockOnTarget, setLockOnTarget] = useState<{ lat: number; lng: number; label: string } | null>(null);
 
   // Timeline state — one `now` for all three so the derived progress is exactly 1/3 on both
   // server and client (separate Date.now() calls made SSR/client styles diverge → #418).
@@ -203,6 +204,11 @@ export default function HomePage() {
       setShowTsunami(true);
     }
   }, []);
+  // Alert lock-on (PANTAU): center the map and hand the target to MapCanvas
+  const handleLockOn = useCallback((lat: number, lng: number) => {
+    setViewport((v) => ({ ...v, latitude: lat, longitude: lng, zoom: Math.max(v.zoom, 7) }));
+    setLockOnTarget({ lat, lng, label: 'PANTAU' });
+  }, []);
 
   // Handle center map
   const handleCenterMap = useCallback((lat: number, lng: number) => {
@@ -225,7 +231,10 @@ export default function HomePage() {
   // HUD mode switch (PETA / BERITA) — opening the news drawer closes the event card
   const handleModeChange = useCallback((next: ViewMode) => {
     setViewMode(next);
-    if (next === 'BERITA') setSelectedFeature(null);
+    if (next === 'BERITA') {
+      setSelectedFeature(null);
+      setLockOnTarget(null);
+    }
   }, []);
 
   // Tsunami polygons for map (pre-positioned at epicenter)
@@ -251,6 +260,7 @@ export default function HomePage() {
         onFeatureClick={handleFeatureClick}
         selectedFeatureId={selectedFeature?.id || null}
         timelineTime={timelineState.currentTime}
+        lockOnTarget={lockOnTarget}
       />
 
       {/* PETA HUD cluster (hidden in BERITA mode) */}
@@ -262,6 +272,7 @@ export default function HomePage() {
           onRefresh={fetchAllData}
           onSearch={handleSearch}
           onNearMe={handleNearMe}
+          onLockOn={handleLockOn}
           loading={loading}
         />
 
@@ -277,7 +288,7 @@ export default function HomePage() {
         <EventCard
           feature={selectedFeature}
           userLocation={userLocation}
-          onClose={() => setSelectedFeature(null)}
+          onClose={() => { setSelectedFeature(null); setLockOnTarget(null); }}
           onSimulateTsunami={handleSimulateTsunami}
           onCenterMap={handleCenterMap}
           isMobile={isMobile}

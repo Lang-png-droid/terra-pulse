@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DisasterType, NewsArticle } from '@/types/disaster';
 import { timeAgo } from '@/lib/timeAgo';
+import { PanelCorners } from './PanelCorners';
 
 interface NewsPanelProps {
   articles: NewsArticle[];
@@ -53,22 +54,23 @@ export function NewsPanel({ articles, loading, error = null, onClose, onCenterMa
       role="tabpanel"
       aria-labelledby="tab-berita"
       aria-label="Berita bencana"
-      className="fixed bottom-0 left-0 right-0 z-40 flex max-h-[70vh] flex-col overflow-hidden rounded-t-2xl tp-panel-strong safe-bottom animate-slide-up md:bottom-4 md:left-auto md:right-4 md:w-80 md:rounded-xl"
+      className="tp-panel-strong fixed bottom-0 left-0 right-0 z-40 flex max-h-[70vh] flex-col overflow-hidden safe-bottom animate-slide-up md:bottom-4 md:left-auto md:right-4 md:w-80"
     >
+      <PanelCorners />
       {/* Grab handle (mobile only) */}
       <div className="flex items-center justify-center py-2 md:hidden">
-        <div className="w-10 h-1 rounded-full bg-tp-border" />
+        <div className="h-0.5 w-10 bg-white/20" />
       </div>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-tp-border">
+      <div className="flex items-center justify-between border-b border-white/[0.09] px-3 py-2">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="tp-label tracking-widest text-tp-text">BERITA BENCANA</span>
-          <span className="tp-badge tp-badge-info h-5">{articles.length}</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500">BERITA BENCANA</span>
+          <span className="font-mono text-[10px] tabular-nums text-tp-cyan">{articles.length}</span>
         </span>
         <button
           onClick={onClose}
-          className="tp-touch rounded-lg text-tp-muted hover:text-tp-cyan transition-colors"
+          className="tp-touch rounded-[2px] text-tp-muted transition-colors hover:text-tp-cyan"
           aria-label="Tutup panel berita"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -91,7 +93,7 @@ export function NewsPanel({ articles, loading, error = null, onClose, onCenterMa
         </ul>
       ) : articles.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8">
-          <span className="tp-label text-tp-muted">TIDAK ADA BERITA</span>
+          <span className="tp-micro">TIDAK ADA BERITA</span>
           {error && <span className="tp-badge tp-badge-watch">OFFLINE</span>}
         </div>
       ) : (
@@ -104,16 +106,16 @@ export function NewsPanel({ articles, loading, error = null, onClose, onCenterMa
                   href={article.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex flex-1 items-start gap-2.5 px-3 py-2.5 min-h-[44px] outline-none transition-colors hover:bg-tp-surface/50 focus-visible:ring-2 focus-visible:ring-tp-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-tp-bg"
+                  className="flex min-h-[44px] flex-1 items-start gap-2.5 px-3 py-2.5 outline-none transition-colors hover:bg-white/[0.04] focus-visible:ring-2 focus-visible:ring-tp-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-tp-bg"
                 >
                   <span
-                    className={TYPE_DOT[article.disasterTypes?.[0] ?? 'earthquake']}
-                    style={{ width: '6px', height: '6px' }}
+                    className={`${TYPE_DOT[article.disasterTypes?.[0] ?? 'earthquake']} mt-1.5 flex-shrink-0`}
+                    style={{ width: '5px', height: '5px' }}
                     aria-hidden="true"
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex items-center gap-2 min-w-0">
-                      <span className="tp-badge tp-badge-info px-1.5 py-0.5 truncate">{article.source}</span>
+                      <span className="truncate border border-tp-cyan/25 bg-tp-cyan/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-tp-cyan">{article.source}</span>
                       <span
                         className="tp-label text-tp-dim whitespace-nowrap tabular-nums"
                         title={absolute(article.publishedAt)}
@@ -121,14 +123,14 @@ export function NewsPanel({ articles, loading, error = null, onClose, onCenterMa
                         {timeAgo(article.publishedAt, now)}
                       </span>
                     </span>
-                    <span className="tp-title text-tp-text line-clamp-2">{article.title}</span>
-                    <span className="tp-body text-tp-muted text-[12px] line-clamp-2">{article.summary}</span>
+                    <span className="line-clamp-2 font-geo text-sm leading-snug text-tp-text">{article.title}</span>
+                    <span className="line-clamp-2 font-mono text-[11px] leading-relaxed text-zinc-500">{article.summary}</span>
                   </span>
                 </a>
                 {location && (
                   <button
                     onClick={() => onCenterMap(location.lat, location.lng)}
-                    className="tp-touch flex-shrink-0 text-tp-muted hover:text-tp-cyan transition-colors"
+                    className="tp-touch flex-shrink-0 text-tp-muted transition-colors hover:text-tp-cyan"
                     aria-label="Tampilkan di peta"
                     title={`Tampilkan ${location.name} di peta`}
                   >

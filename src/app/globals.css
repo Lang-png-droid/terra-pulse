@@ -2,21 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Share+Tech+Mono&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 @layer base {
   :root {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 63.9%;
-    --border: 0 0% 20%;
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 98%;
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 98%;
+    /* TerraPulse Design System Colors */
+    --tp-bg-primary: #050507;
+    --tp-bg-panel: #09090B;
+    --tp-bg-panel-alpha: #09090BB3;
+    --tp-border-subtle: rgba(255,255,255,0.08);
+    --tp-border-active: rgba(34,211,238,0.4);
+    --tp-accent-cyan: #22D3EE;
+    --tp-accent-violet: #A855F7;
+    --tp-accent-cyan-glow: rgba(34,211,238,0.6);
+    --tp-accent-violet-glow: rgba(168,85,247,0.6);
+    --tp-status-critical: #EF4444;
+    --tp-status-high: #F97316;
+    --tp-status-watch: #EAB308;
+    --tp-status-normal: #22C55E;
+    --tp-text-primary: #F8FAFC;
+    --tp-text-muted: #71717A;
+    --tp-text-dim: #3F3F46;
+
+    /* Legacy shadcn compat */
+    --background: 5 5% 3%;
+    --foreground: 240 10% 97%;
+    --muted: 5 5% 6%;
+    --muted-foreground: 0 0% 44%;
+    --border: 0 0% 12%;
+    --accent: 5 5% 10%;
+    --accent-foreground: 240 10% 97%;
+    --card: 5 5% 4%;
+    --card-foreground: 240 10% 97%;
   }
 
   * {
-    @apply border-zinc-800;
+    @apply border-tp-border;
   }
 
   html {
@@ -25,7 +46,7 @@
   }
 
   body {
-    @apply h-full bg-zinc-950 text-white;
+    @apply h-full bg-tp-bg text-tp-text;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
@@ -35,7 +56,7 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-zinc-900;
+    @apply bg-tp-bg;
   }
   ::-webkit-scrollbar-thumb {
     @apply bg-zinc-700 rounded-full;
@@ -44,32 +65,146 @@
     @apply bg-zinc-600;
   }
   ::-webkit-scrollbar-corner {
-    @apply bg-zinc-900;
+    @apply bg-tp-bg;
   }
 
   /* Focus visible for accessibility */
   *:focus-visible {
-    @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-zinc-950;
+    @apply outline-none ring-2 ring-tp-cyan ring-offset-2 ring-offset-tp-bg;
   }
 
   /* Selection */
   ::selection {
-    @apply bg-blue-500/30 text-white;
+    @apply bg-tp-cyan/30 text-white;
+  }
+
+  /* Font utilities */
+  .font-mono {
+    font-family: 'Fira Code', 'Share Tech Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+  .font-geo {
+    font-family: 'Space Grotesk', Inter, system-ui, sans-serif;
   }
 }
 
 @layer components {
-  /* Glassmorphism */
-  .glass {
-    @apply bg-zinc-950/80 backdrop-blur-md border border-zinc-700;
+  /* Hairline panel shells: 2px radius, #050507 at 75%, 1px 9% white border, no blur blob. */
+  .tp-panel {
+    @apply bg-[#050507]/75 backdrop-blur-md border border-white/[0.09];
+    border-radius: 2px;
   }
-  .glass-strong {
-    @apply bg-zinc-950/95 backdrop-blur-lg border border-zinc-700;
+  .tp-panel-strong {
+    @apply bg-[#050507]/75 backdrop-blur-md border border-white/[0.09];
+    border-radius: 2px;
+  }
+
+  /* Hairline HUD type scale: 9px micro labels, 2xl primary metrics. */
+  .tp-micro {
+    @apply font-mono text-[9px] uppercase tracking-[0.22em] text-zinc-500;
+  }
+  .tp-metric {
+    @apply font-geo text-2xl font-semibold tracking-tight tabular-nums text-tp-text;
+  }
+  /* One-shot 150ms alert flash on the status bar (re-triggered by remount). */
+  .tp-pulse-line {
+    animation: tp-pulse-line 150ms ease-out 1;
+  }
+
+  /* Telemetry label: uppercase monospace, tracking-widest, 10-11px */
+  .tp-label {
+    @apply font-mono text-[10px] uppercase tracking-widest text-tp-muted;
+  }
+  .tp-label-sm {
+    @apply font-mono text-[11px] uppercase tracking-widest text-tp-muted;
+  }
+
+  /* Data values: geometric sans, tabular-nums */
+  .tp-value {
+    @apply font-geo tabular-nums text-tp-text;
+  }
+  .tp-value-lg {
+    @apply font-geo tabular-nums text-lg font-semibold text-tp-text;
+  }
+  .tp-value-xl {
+    @apply font-geo tabular-nums text-xl font-bold text-tp-text;
+  }
+  /* Compact title: geometric sans, medium weight */
+  .tp-title {
+    @apply font-geo text-sm font-medium text-tp-text;
+  }
+  /* Touch target minimum 44x44 */
+  .tp-touch {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  /* Glowing indicator dot */
+  .tp-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+  .tp-dot-active {
+    @apply tp-dot bg-tp-cyan shadow-[0_0_6px_#22D3EE];
+  }
+  .tp-dot-inactive {
+    @apply tp-dot bg-tp-dim;
+  }
+
+  /* Disaster-specific dot colors */
+  .tp-dot-earthquake {
+    @apply tp-dot bg-tp-cyan shadow-[0_0_8px_#22D3EE];
+  }
+  .tp-dot-hotspot {
+    @apply tp-dot bg-tp-watch shadow-[0_0_8px_#EAB308];
+  }
+  .tp-dot-volcano {
+    @apply tp-dot bg-tp-high shadow-[0_0_8px_#F97316];
+  }
+  .tp-dot-volcano-critical {
+    @apply tp-dot bg-tp-critical shadow-[0_0_8px_#EF4444];
+  }
+  .tp-dot-cyclone {
+    @apply tp-dot bg-tp-violet shadow-[0_0_8px_#A855F7];
+  }
+  .tp-dot-rain {
+    @apply tp-dot bg-tp-cyan shadow-[0_0_8px_#22D3EE];
+  }
+  .tp-dot-tsunami {
+    @apply tp-dot bg-tp-violet shadow-[0_0_8px_#A855F7];
+  }
+  .tp-dot-flood {
+    @apply tp-dot bg-tp-cyan shadow-[0_0_8px_#22D3EE];
+  }
+
+  /* Badge variants */
+  .tp-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10px] font-medium uppercase tracking-wider;
+  }
+  .tp-badge-critical {
+    @apply tp-badge bg-tp-critical/15 text-tp-critical border border-tp-critical/30;
+  }
+  .tp-badge-high {
+    @apply tp-badge bg-tp-high/15 text-tp-high border border-tp-high/30;
+  }
+  .tp-badge-watch {
+    @apply tp-badge bg-tp-watch/15 text-tp-watch border border-tp-watch/30;
+  }
+  .tp-badge-normal {
+    @apply tp-badge bg-tp-normal/15 text-tp-normal border border-tp-normal/30;
+  }
+  .tp-badge-info {
+    @apply tp-badge bg-tp-cyan/15 text-tp-cyan border border-tp-cyan/30;
+  }
+
+  /* Gradient track for timeline */
+  .tp-gradient-track {
+    background: linear-gradient(90deg, var(--tp-accent-cyan), var(--tp-accent-violet));
   }
 
   /* Animations */
   .animate-slide-up {
     animation: slideUp 0.3s ease-out;
+  }
+  .animate-slide-in {
+    animation: slideInLeft 0.25s ease-out;
   }
   .animate-slide-down {
     animation: slideDown 0.3s ease-out;
@@ -80,113 +215,113 @@
   .animate-scale-in {
     animation: scaleIn 0.2s ease-out;
   }
-
-  /* Touch targets */
-  .touch-target {
-    @apply min-h-[44px] min-w-[44px];
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
-
-  /* Text clamp utilities */
-  .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-  .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-
-  /* MapLibre popup overrides */
-  .maplibregl-popup-content {
-    @apply bg-zinc-900 border-zinc-700 text-white rounded-lg shadow-xl;
+  .animate-spin-slow {
+    animation: spin 2s linear infinite;
   }
-  .maplibregl-popup-close-button {
-    @apply text-zinc-400 hover:text-white;
-  }
-  .maplibregl-popup-tip {
-    border-top-color: #27272a !important;
-  }
-
-  /* DeckGL canvas */
-  #deck-canvas {
-    @apply pointer-events-none;
+  .animate-radar-sweep {
+    animation: tp-radar-sweep 4s linear infinite;
+    transform-origin: center;
   }
 }
 
 @layer utilities {
+  /* Gradient text */
+  .tp-gradient-text {
+    @apply bg-gradient-to-r from-tp-cyan to-tp-violet bg-clip-text text-transparent;
+  }
+
+  /* Cyan glow box-shadow */
+  .tp-glow-cyan {
+    box-shadow: 0 0 12px var(--tp-accent-cyan-glow), 0 0 24px var(--tp-accent-cyan-glow);
+  }
+  .tp-glow-violet {
+    box-shadow: 0 0 12px var(--tp-accent-violet-glow), 0 0 24px var(--tp-accent-violet-glow);
+  }
+
   /* Safe area insets */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
   .safe-area-inset-top {
     padding-top: env(safe-area-inset-top);
   }
-  .safe-area-inset-bottom {
+  .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .safe-area-inset-left {
+  .safe-left {
     padding-left: env(safe-area-inset-left);
   }
-  .safe-area-inset-right {
+  .safe-right {
     padding-right: env(safe-area-inset-right);
-  }
-
-  /* Hide scrollbar but keep scroll */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Text balance */
-  .text-balance {
-    text-wrap: balance;
-  }
-
-  /* Hardware acceleration */
-  .gpu-accelerated {
-    transform: translateZ(0);
-    will-change: transform;
   }
 }
 
+/* Keyframes */
+@keyframes tp-pulse-line {
+  0% {
+    opacity: 1;
+  }
+  40% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-20px);
+    transform: translateY(-10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
 @keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes tp-radar-sweep {
+  from { transform: rotate(0deg); transform-origin: center; }
+  to { transform: rotate(360deg); transform-origin: center; }
 }
 
 /* Print styles */
 @media print {
-  .no-print {
-    display: none !important;
-  }
+  .no-print { display: none !important; }
 }
 
 /* Reduced motion */

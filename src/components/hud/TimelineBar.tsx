@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { PanelCorners } from './PanelCorners';
 
 interface TimelineBarProps {
   currentTime: number;
@@ -155,11 +156,13 @@ export function TimelineBar({
       aria-valuenow={Math.round(pct)}
     >
       <div className="pointer-events-auto w-full max-w-sm lg:max-w-md">
-        <div className="tp-panel rounded-full h-10 flex items-center gap-2 px-3">
-          {/* Play/Pause button - 36px visual inside a 44px hit area */}
+        <div className="tp-panel relative flex items-center gap-2 px-3 py-1.5">
+          <PanelCorners />
+
+          {/* Play/Pause — 44px hit area, square hairline visual */}
           <button
             onClick={onPlayPause}
-            className="p-1.5 bg-tp-surface/60 border border-tp-border/50 rounded-full text-tp-text hover:bg-tp-cyan/20 hover:border-tp-cyan/30 hover:text-tp-cyan transition-colors w-9 h-9 flex items-center justify-center tp-touch flex-shrink-0"
+            className="tp-touch flex-shrink-0 rounded-[2px] border border-white/[0.09] bg-white/[0.04] text-tp-text transition-colors hover:border-tp-cyan/40 hover:text-tp-cyan"
             aria-label={isPlaying ? 'Pause' : 'Play'}
             aria-pressed={isPlaying}
           >
@@ -170,12 +173,12 @@ export function TimelineBar({
             )}
           </button>
 
-          {/* Speed selector — slim chip, 44x44 target on the select itself */}
-          <label className="h-6 min-w-[44px] flex items-center justify-center bg-tp-surface/40 rounded-md flex-shrink-0 cursor-pointer">
+          {/* Speed selector — 44x44 target on the select itself */}
+          <label className="flex h-6 min-w-[44px] flex-shrink-0 cursor-pointer items-center justify-center rounded-[2px] bg-white/[0.04]">
             <select
               value={speed}
               onChange={(e) => onSpeedChange(parseFloat(e.target.value))}
-              className="h-11 min-h-[44px] min-w-[44px] p-0 bg-transparent border-none text-tp-text text-[11px] font-mono tabular-nums text-center focus:outline-none focus:ring-1 focus:ring-tp-cyan/50 cursor-pointer appearance-none"
+              className="h-11 min-h-[44px] min-w-[44px] cursor-pointer appearance-none border-none bg-transparent p-0 text-center font-mono text-[11px] tabular-nums text-tp-text focus:outline-none focus:ring-1 focus:ring-tp-cyan/50"
               aria-label="Playback speed"
             >
               <option value={1}>1×</option>
@@ -184,87 +187,106 @@ export function TimelineBar({
             </select>
           </label>
 
-          {/* Timestamp - monospace tabular-nums */}
-          <span className="tp-value tabular-nums text-tp-text whitespace-nowrap flex-1 text-center min-w-0 font-mono text-[12px]">
-            {mounted ? formatTimeLabel(displayTime) : null}
-          </span>
-
-          {/* Scrubber: 2px visual track inside a 40px hit area */}
-          <div
-            ref={sliderRef}
-            className="relative h-10 flex-1 min-w-0 mx-2 flex items-center"
-            onMouseLeave={() => setHoverProgress(null)}
-            onMouseMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setHoverProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-            }}
-          >
-            {/* Track background + gradient progress fill (cyan to violet) */}
-            <div className="relative w-full h-[2px] bg-tp-surface/40 rounded-full">
-              <div
-                className="absolute left-0 top-0 h-full rounded-full tp-gradient-track transition-all duration-75 ease-out"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-
-            {/* Time markers: -24H, NOW, +24H, +48H */}
-            <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-              {markers.map((m, i) => (
-                <div
-                  key={i}
-                  className={`absolute bottom-0 -translate-x-1/2 bg-tp-cyan ${m.isMajor ? 'w-[2px]' : 'w-[1px]'}`}
-                  style={{ left: `${m.position * 100}%`, height: m.isMajor ? '10px' : '6px' }}
-                />
-              ))}
-            </div>
-
-            {/* Draggable handle: 12px visual, 44px hit area */}
+          {/* Track column: scrubber on top, marker labels in their own row below */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {/* Scrubber: 2px visual track inside a 40px hit area */}
             <div
-              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center ${
-                dragging ? 'cursor-grabbing' : 'cursor-grab'
-              }`}
-              style={{ left: `${pct}%` }}
-              role="slider"
-              tabIndex={0}
-              aria-label="Timeline scrubber"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(pct)}
-              onMouseDown={handleMouseDown}
-              onTouchStart={handleMouseDown}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowLeft') {
-                  e.preventDefault();
-                  const stepMs = stepHours * 3600000;
-                  const newTime = Math.max(startTime, displayTime - stepMs);
-                  setLocalTime(newTime);
-                  animationTimeRef.current = newTime;
-                } else if (e.key === 'ArrowRight') {
-                  e.preventDefault();
-                  const stepMs = stepHours * 3600000;
-                  const newTime = Math.min(endTime, displayTime + stepMs);
-                  setLocalTime(newTime);
-                  animationTimeRef.current = newTime;
-                }
+              ref={sliderRef}
+              className="relative flex h-10 items-center"
+              onMouseLeave={() => setHoverProgress(null)}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setHoverProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
               }}
             >
+              {/* Track background + gradient progress fill (cyan to violet) */}
+              <div className="relative h-[2px] w-full bg-white/10">
+                <div
+                  className="absolute left-0 top-0 h-full tp-gradient-track transition-all duration-75 ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+
+              {/* Ticks: -24H, NOW, +24H, +48H */}
+              <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+                {markers.map((m, i) => (
+                  <div
+                    key={i}
+                    className={`absolute bottom-1/2 -translate-x-1/2 bg-tp-cyan ${m.isMajor ? 'w-[2px]' : 'w-[1px]'}`}
+                    style={{ left: `${m.position * 100}%`, height: m.isMajor ? '10px' : '6px' }}
+                  />
+                ))}
+              </div>
+
+              {/* Draggable handle: 12px visual, 44px hit area */}
               <div
-                className={`w-3 h-3 rounded-full bg-tp-cyan border-2 border-tp-bg shadow-tp-glow-cyan transition-transform duration-100 ${
-                  dragging ? 'scale-125' : ''
+                className={`absolute top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center ${
+                  dragging ? 'cursor-grabbing' : 'cursor-grab'
                 }`}
-              />
+                style={{ left: `${pct}%` }}
+                role="slider"
+                tabIndex={0}
+                aria-label="Timeline scrubber"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(pct)}
+                onMouseDown={handleMouseDown}
+                onTouchStart={handleMouseDown}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    const stepMs = stepHours * 3600000;
+                    const newTime = Math.max(startTime, displayTime - stepMs);
+                    setLocalTime(newTime);
+                    animationTimeRef.current = newTime;
+                  } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const stepMs = stepHours * 3600000;
+                    const newTime = Math.min(endTime, displayTime + stepMs);
+                    setLocalTime(newTime);
+                    animationTimeRef.current = newTime;
+                  }
+                }}
+              >
+                <div
+                  className={`h-3 w-3 rounded-full bg-tp-cyan border-2 border-tp-bg shadow-tp-glow-cyan transition-transform duration-100 ${
+                    dragging ? 'scale-125' : ''
+                  }`}
+                />
+              </div>
+
+              {/* Hover preview */}
+              {hoverProgress !== null && !dragging && (
+                <div
+                  className="absolute bottom-full mb-1 -translate-x-1/2 whitespace-nowrap rounded-[2px] border border-white/[0.09] bg-[#050507]/95 px-2 py-1 font-mono text-[10px] tabular-nums text-tp-text"
+                  style={{ left: `${Math.round(hoverProgress * 10000) / 100}%` }}
+                >
+                  {formatTimeLabel(startTime + hoverProgress * (endTime - startTime))}
+                </div>
+              )}
             </div>
 
-            {/* Hover preview */}
-            {hoverProgress !== null && !dragging && (
-              <div
-                className="absolute bottom-full -translate-x-1/2 mb-2 px-2 py-1 bg-tp-surface border border-tp-border rounded tp-label text-[10px] tabular-nums text-tp-text whitespace-nowrap"
-                style={{ left: `${Math.round(hoverProgress * 10000) / 100}%` }}
-              >
-                {formatTimeLabel(startTime + hoverProgress * (endTime - startTime))}
-              </div>
-            )}
+            {/* Marker labels — own row under the track, never over the timestamp */}
+            <div className="relative h-3" aria-hidden="true">
+              {markers.map((m, i) => (
+                <span
+                  key={i}
+                  className="absolute top-0 font-mono text-[9px] uppercase tracking-[0.18em] text-zinc-500"
+                  style={{
+                    left: `${m.position * 100}%`,
+                    transform: `translateX(-${m.position * 100}%)`,
+                  }}
+                >
+                  {m.label}
+                </span>
+              ))}
+            </div>
           </div>
+
+          {/* Timestamp — own slot at the end of the row */}
+          <span className="tp-value flex-shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums">
+            {mounted ? formatTimeLabel(displayTime) : null}
+          </span>
         </div>
       </div>
     </div>
