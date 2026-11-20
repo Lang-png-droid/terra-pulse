@@ -11,14 +11,13 @@ import { NewsPanel } from '@/components/hud/NewsPanel';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import {
   DisasterFeature,
-  DisasterFeatureCollection,
   LayerVisibility,
   DEFAULT_LAYER_VISIBILITY,
   TimelineState,
   NewsArticle,
   DisasterType,
 } from '@/types/disaster';
-import { haversineDistance } from '@/lib/geoMath';
+import type { GeocodeResponse } from '@/app/api/geocode/route';
 import { simulateTsunami, TsunamiSimulationResult } from '@/components/map/TsunamiSimulation';
 
 const INITIAL_VIEWPORT = {
@@ -76,53 +75,56 @@ export default function HomePage() {
   const fetchAllData = useCallback(async () => {
     if (fetchAbortRef.current) fetchAbortRef.current.abort();
     fetchAbortRef.current = new AbortController();
-    const signal = fetchAbortRef.current.signal;
+    // Routes cap egress at 3s; the client gives them 5s, then stops waiting.
+    const signal = AbortSignal.any([fetchAbortRef.current.signal, AbortSignal.timeout(5000)]);
 
     setLoading(true);
-    try {
-      // Fetch earthquakes first (primary data)
-      const eqRes = await fetch('/api/earthquakes', { signal, next: { revalidate: 60 } });
-      if (eqRes.ok) {
-        const data: DisasterFeatureCollection = await eqRes.json();
-        setEarthquakes(data.features);
-      }
-      // Hide loading once primary data (earthquakes) loads
-      setLoading(false);
 
-      // Fetch remaining data in parallel (non-blocking)
-      const [hsRes, volRes, wxRes, newsRes] = await Promise.allSettled([
-        fetch('/api/hotspots', { signal, next: { revalidate: 300 } }),
-        fetch('/api/volcanoes', { signal, next: { revalidate: 300 } }),
-        fetch('/api/weather', { signal, next: { revalidate: 120 } }),
-        fetch('/api/news', { signal, next: { revalidate: 300 } }),
-      ]);
+    // Every route answers 200 even when its upstream feed is dead, so a rejected
+    // fetch here only means "this client gave up" — never a reason to skip the rest.
+    const [eqRes, hsRes, volRes, wxRes, newsRes] = await Promise.allSettled([
+      fetch('/api/earthquakes', { signal }),
+      fetch('/api/hotspots', { signal }),
+      fetch('/api/volcanoes', { signal }),
+      fetch('/api/weather', { signal }),
+      fetch('/api/news', { signal }),
+    ]);
+    if (signal.aborted) return;
 
-      if (hsRes.status === 'fulfilled' && hsRes.value.ok) {
-        const data: DisasterFeatureCollection = await hsRes.value.json();
-        setHotspots(data.features);
+    const readJson = async (result: PromiseSettledResult<Response>) => {
+      if (result.status !== 'fulfilled' || !result.value.ok) return null;
+      try {
+        return await result.value.json();
+      } catch {
+        return null;
       }
-      if (volRes.status === 'fulfilled' && volRes.value.ok) {
-        const data: DisasterFeatureCollection = await volRes.value.json();
-        setVolcanoes(data.features);
-      }
-      if (wxRes.status === 'fulfilled' && wxRes.value.ok) {
-        const data = await wxRes.value.json();
-        if (data.radar?.length) setRainRadarTiles(data.radar.map((r: any) => r.path));
-        if (data.weather) setWindGrid(data.weather);
-        if (data.cyclones?.features?.length) setCyclones(data.cyclones.features);
-      }
-      if (newsRes.status === 'fulfilled' && newsRes.value.ok) {
-        const data = await newsRes.value.json();
-        setNewsArticles(data.articles || []);
-        setNewsError(null);
-      } else {
-        setNewsError('Gagal memuat berita');
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('Fetch error:', err);
-      }
-      setLoading(false);
+    };
+
+    const [eqData, hsData, volData, wxData, newsData] = await Promise.all([
+      readJson(eqRes),
+      readJson(hsRes),
+      readJson(volRes),
+      readJson(wxRes),
+      readJson(newsRes),
+    ]);
+    if (signal.aborted) return;
+
+    if (eqData?.features) setEarthquakes(eqData.features);
+    // Primary data is in: drop the loading indicator before the secondary layers.
+    setLoading(false);
+
+    if (hsData?.features) setHotspots(hsData.features);
+    if (volData?.features) setVolcanoes(volData.features);
+    if (wxData) {
+      if (wxData.radar?.length) setRainRadarTiles(wxData.radar.map((r: any) => r.path));
+      if (wxData.weather) setWindGrid(wxData.weather);
+      if (wxData.cyclones?.features?.length) setCyclones(wxData.cyclones.features);
+    }
+    if (newsData) {
+      setNewsArticles(newsData.articles || []);
+      setNewsError(null);
+    } else {
+      setNewsError('Gagal memuat berita');
     }
   }, []);
 
@@ -153,18 +155,16 @@ export default function HomePage() {
   // Handle search
   const handleSearch = useCallback(async (query: string) => {
     try {
-      // Simple geocoding using Nominatim (free)
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=id`,
-        { headers: { 'User-Agent': 'TerraPulse/1.0' } }
-      );
-      const data = await res.json();
-      if (data.length > 0) {
-        const { lat, lon } = data[0];
-        setViewport((v) => ({ ...v, latitude: parseFloat(lat), longitude: parseFloat(lon), zoom: 8 }));
-      }
-    } catch (err) {
-      console.error('Search error:', err);
+      // Geocoding is proxied: AGENTS.md §2 forbids client-side external fetches.
+      const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return;
+      const data: GeocodeResponse = await res.json();
+      const hit = data.results?.[0];
+      if (hit) setViewport((v) => ({ ...v, latitude: hit.lat, longitude: hit.lon, zoom: 8 }));
+    } catch {
+      // Offline or timed out: keep the current viewport, no error log.
     }
   }, []);
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { generateMockNews, NewsArticle } from '@/lib/normalizers';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 
 const NEWS_SOURCES = [
   { name: 'BMKG', url: 'https://data.bmkg.go.id/DataMKG/TEWS/latest_earthquake.json', type: 'earthquake' },
@@ -8,9 +9,9 @@ const NEWS_SOURCES = [
 ];
 
 async function fetchRssFeed(url: string): Promise<any[]> {
+  const res = await fetchWithTimeout(url, { next: { revalidate: 600 } } as RequestInit);
+  if (!res) return [];
   try {
-    const res = await fetch(url, { next: { revalidate: 600 } });
-    if (!res.ok) return [];
     const text = await res.text();
     // Simple RSS parsing - in production use a proper parser
     const items = text.match(/<item>[\s\S]*?<\/item>/g) || [];
@@ -33,28 +34,33 @@ export async function GET(request: Request) {
 
   let articles: NewsArticle[] = [];
 
-  // Try to fetch from real sources (RSS)
-  for (const source of NEWS_SOURCES) {
-    try {
-      const items = await fetchRssFeed(source.url);
-      for (const item of items.slice(0, 5)) {
+  try {
+    // Sources are independent: fetch in parallel so a dead network costs one
+    // 3s timeout, not one per source.
+    const feeds = await Promise.allSettled(NEWS_SOURCES.map((source) => fetchRssFeed(source.url)));
+
+    feeds.forEach((feed, index) => {
+      if (feed.status !== 'fulfilled') return;
+      const source = NEWS_SOURCES[index];
+      for (const item of feed.value.slice(0, 5)) {
         articles.push({
           id: `news-${source.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           title: item.title,
-          summary: item.description.replace(/<[^>]*>/g, '').slice(0, 200),
+          summary: String(item.description ?? '').replace(/<[^>]*>/g, '').slice(0, 200),
           url: item.link,
           source: source.name,
           publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
           disasterTypes: [source.type as any],
         });
       }
-    } catch {
-      // Ignore individual source failures
-    }
+    });
+  } catch {
+    // Degraded network: fall through to mock news.
   }
 
   // Fallback to mock data if no real articles
-  if (articles.length === 0) {
+  const usedMock = articles.length === 0;
+  if (usedMock) {
     articles = generateMockNews();
   }
 
@@ -69,10 +75,14 @@ export async function GET(request: Request) {
   // Limit results
   articles = articles.slice(0, limit);
 
-  return NextResponse.json({ articles }, {
-    headers: {
-      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-      'Access-Control-Allow-Origin': '*',
+  return NextResponse.json(
+    { articles, meta: { source: usedMock ? 'mock' : 'live', cached: false, stale: usedMock, timestamp: new Date().toISOString() } },
+    {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+        'Access-Control-Allow-Origin': '*',
+      },
     },
-  });
+  );
 }

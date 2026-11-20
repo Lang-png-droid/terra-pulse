@@ -1,21 +1,12 @@
-import { NextResponse } from 'next/server';
 import { normalizeVolcanoes } from '@/lib/normalizers';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
+import { emptyCollection, geojsonResponse } from '@/lib/geojsonResponse';
+import type { DisasterFeatureCollection } from '@/types/disaster';
 
 const PVMBG_URL = 'https://magma.vsi.esdm.go.id/api/volcanoes'; // May need adjustment
 const SMITHSONIAN_URL = 'https://volcano.si.edu/eruption-results.cfm?format=json'; // Example
 
-async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response | null> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal, next: { revalidate: 300 } });
-    clearTimeout(id);
-    return res.ok ? res : null;
-  } catch {
-    clearTimeout(id);
-    return null;
-  }
-}
+const REVALIDATE = { next: { revalidate: 300 } } as RequestInit;
 
 // Fallback static volcano data for Indonesia (major volcanoes)
 const INDONESIA_VOLCANOES = [
@@ -33,47 +24,35 @@ const INDONESIA_VOLCANOES = [
   { name: 'Marapi', lat: -0.38, lng: 100.474, status: 'Siaga' },
 ];
 
+async function fetchJson(url: string): Promise<any | null> {
+  const res = await fetchWithTimeout(url, REVALIDATE);
+  if (!res) return null;
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
-  let data: any = null;
-  let source = 'Static Fallback';
+  let collection: DisasterFeatureCollection;
+  let source = 'Static Fallback (Indonesia Major Volcanoes)';
 
-  // Try PVMBG
-  const pvmbgRes = await fetchWithTimeout(PVMBG_URL);
-  if (pvmbgRes) {
-    try {
-      data = await pvmbgRes.json();
-      source = 'PVMBG';
-    } catch {
-      // ignore
+  try {
+    // Both feeds are optional; query them concurrently so a dead network costs 3s once.
+    const [pvmbgData, smithsonianData] = await Promise.all([fetchJson(PVMBG_URL), fetchJson(SMITHSONIAN_URL)]);
+    const data = pvmbgData ?? smithsonianData;
+
+    if (data) {
+      source = pvmbgData ? 'PVMBG' : 'Smithsonian GVP';
+      collection = normalizeVolcanoes(data);
+    } else {
+      collection = normalizeVolcanoes(INDONESIA_VOLCANOES);
     }
+  } catch {
+    collection = emptyCollection('Unavailable');
+    source = 'Unavailable';
   }
 
-  // Try Smithsonian if PVMBG failed
-  if (!data) {
-    const smithRes = await fetchWithTimeout(SMITHSONIAN_URL);
-    if (smithRes) {
-      try {
-        data = await smithRes.json();
-        source = 'Smithsonian GVP';
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  // Use static fallback if all failed
-  if (!data) {
-    data = INDONESIA_VOLCANOES;
-    source = 'Static Fallback (Indonesia Major Volcanoes)';
-  }
-
-  const collection = normalizeVolcanoes(data);
-  collection.metadata.source = source;
-
-  return NextResponse.json(collection, {
-    headers: {
-      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
+  return geojsonResponse(collection, source, 300);
 }

@@ -1,98 +1,48 @@
 import { NextResponse } from 'next/server';
 import { normalizeRainViewer, normalizeOpenMeteoWind, normalizeCyclones, RainViewerTileInfo, WindGridData } from '@/lib/normalizers';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 
 const RAINVIEWER_URL = 'https://api.rainviewer.com/public/weather-maps.json';
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
-const JTWC_URL = 'https://metocph.nmci.navy.mil/jtwc/best_tracks/wp/best_tracks_wp.zip'; // Complex, use alternative
-// Alternative cyclone source
-const CYCLONE_URL = 'https://api.rainviewer.com/public/weather-maps.json'; // RainViewer has storm tracks
 
-async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response | null> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, { signal: controller.signal, next: { revalidate: 120 } });
-    clearTimeout(id);
-    return res.ok ? res : null;
-  } catch {
-    clearTimeout(id);
-    return null;
-  }
-}
-
-interface WeatherResponse {
-  rainRadar: RainViewerTileInfo[];
-  windGrid: WindGridData | null;
-  cyclones: any; // DisasterFeatureCollection
+export interface WeatherResponse {
+  radar: RainViewerTileInfo[] | null;
+  weather: WindGridData | null;
+  cyclones: Record<string, unknown>;
   timestamp: string;
+  status: 'ok' | 'degraded';
+  errors?: string[];
 }
 
-export async function GET() {
-  const errors: string[] = [];
+type SourceResult<T> = { data: T } | { error: string };
 
-  // Fetch RainViewer (radar tiles + storm tracks)
-  let rainRadar: RainViewerTileInfo[] = [];
-  let cyclonesData: any = null;
-
-  const rvRes = await fetchWithTimeout(RAINVIEWER_URL);
-  if (rvRes) {
-    try {
-      const rvData = await rvRes.json();
-      rainRadar = normalizeRainViewer(rvData);
-      cyclonesData = rvData; // RainViewer includes storm data
-    } catch {
-      errors.push('RainViewer parse error');
-    }
-  } else {
-    errors.push('RainViewer fetch failed');
+/**
+ * Fetch and normalize are reported separately: a normalizer throw used to be
+ * swallowed into `null` and logged as "fetch failed", which hid parser bugs.
+ */
+async function loadRainViewer(): Promise<SourceResult<{ radar: RainViewerTileInfo[]; cyclones: any }>> {
+  const res = await fetchWithTimeout(RAINVIEWER_URL, { next: { revalidate: 120 } } as RequestInit);
+  if (!res) return { error: 'RainViewer fetch failed or timeout' };
+  try {
+    const data = await res.json();
+    return { data: { radar: normalizeRainViewer(data), cyclones: data } };
+  } catch {
+    return { error: 'RainViewer response could not be parsed' };
   }
+}
 
-  // Fetch Open-Meteo wind grid (global, 0.25 deg resolution)
-  let windGrid: WindGridData | null = null;
-  const omUrl = `${OPEN_METEO_URL}?latitude=-90&longitude=-180&hourly=wind_speed_10m,wind_direction_10m,surface_pressure&wind_speed_unit=ms&timezone=UTC&models=gfs_global&past_days=1&forecast_days=2`;
-  const omRes = await fetchWithTimeout(omUrl);
-  if (omRes) {
-    try {
-      const omData = await omRes.json();
-      windGrid = normalizeOpenMeteoWind(omData);
-    } catch {
-      errors.push('Open-Meteo parse error');
-    }
-  } else {
-    errors.push('Open-Meteo fetch failed');
+async function loadOpenMeteo(): Promise<SourceResult<WindGridData | null>> {
+  const url = `${OPEN_METEO_URL}?latitude=-90&longitude=-180&hourly=wind_speed_10m,wind_direction_10m,surface_pressure&wind_speed_unit=ms&timezone=UTC&models=gfs_global&past_days=1&forecast_days=2`;
+  const res = await fetchWithTimeout(url, { next: { revalidate: 120 } } as RequestInit);
+  if (!res) return { error: 'Open-Meteo fetch failed or timeout' };
+  try {
+    return { data: normalizeOpenMeteoWind(await res.json()) };
+  } catch {
+    return { error: 'Open-Meteo response could not be parsed' };
   }
-
-  // Normalize cyclones (from RainViewer storm data or mock)
-  let cyclones: any;
-  if (cyclonesData?.storms) {
-    cyclones = normalizeCyclones(cyclonesData.storms);
-  } else if (cyclonesData?.host) {
-    // RainViewer has storm tracks in a different format
-    // For now, generate mock cyclones
-    cyclones = normalizeCyclones(generateMockCyclones());
-    cyclones.metadata.source = 'Mock (RainViewer storms unavailable)';
-  } else {
-    cyclones = normalizeCyclones(generateMockCyclones());
-    cyclones.metadata.source = 'Mock Cyclones';
-  }
-
-  const response: WeatherResponse = {
-    rainRadar,
-    windGrid,
-    cyclones,
-    timestamp: new Date().toISOString(),
-  };
-
-  return NextResponse.json(response, {
-    headers: {
-      'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=240',
-      'Access-Control-Allow-Origin': '*',
-    },
-  });
 }
 
 function generateMockCyclones() {
-  // Generate realistic mock cyclone data for Western Pacific / Indian Ocean
   const now = Date.now();
   return [
     {
@@ -125,4 +75,55 @@ function generateMockCyclones() {
       ],
     },
   ];
+}
+
+function buildCyclones(rainViewer: { cyclones: any } | null) {
+  const cyclonesData = rainViewer?.cyclones;
+  if (cyclonesData?.storms) return normalizeCyclones(cyclonesData.storms);
+  const cyclones = normalizeCyclones(generateMockCyclones());
+  cyclones.metadata.source = cyclonesData?.host ? 'Mock (RainViewer storms unavailable)' : 'Mock Cyclones';
+  return cyclones;
+}
+
+export async function GET() {
+  const errors: string[] = [];
+
+  try {
+    // Independent sources: one 3s window, not 3s each in series.
+    const [rainViewer, windGrid] = await Promise.all([loadRainViewer(), loadOpenMeteo()]);
+
+    if ('error' in rainViewer) errors.push(rainViewer.error);
+    if ('error' in windGrid) errors.push(windGrid.error);
+
+    const response: WeatherResponse = {
+      radar: 'data' in rainViewer ? rainViewer.data.radar : null,
+      weather: 'data' in windGrid ? windGrid.data : null,
+      cyclones: buildCyclones('data' in rainViewer ? rainViewer.data : null) as unknown as Record<string, unknown>,
+      timestamp: new Date().toISOString(),
+      status: errors.length > 0 ? 'degraded' : 'ok',
+      errors: errors.length > 0 ? errors : undefined,
+    };
+
+    // Always 200, even degraded: the map must never lose the stream.
+    return NextResponse.json(response, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=240',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  } catch {
+    // Safety net: never return 500 from this route.
+    return NextResponse.json(
+      {
+        radar: null,
+        weather: null,
+        cyclones: {},
+        timestamp: new Date().toISOString(),
+        status: 'degraded',
+        errors: ['Weather handler error'],
+      } satisfies WeatherResponse,
+      { status: 200 },
+    );
+  }
 }
