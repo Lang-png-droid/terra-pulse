@@ -130,10 +130,15 @@ export function TimelineBar({
   }, [dragging, handleMouseMove, handleMouseUp]);
 
   const displayTime = isPlaying ? animationTimeRef.current : localTime;
-  const progress = (displayTime - startTime) / (endTime - startTime);
+  // A zero-length window (start === end, e.g. a degraded timeline payload) would divide by
+  // zero here and leak NaN into the fill width and aria-valuenow. Guard at the source.
+  const span = endTime - startTime;
+  const progress = span > 0 ? (displayTime - startTime) / span : 0;
   // ponytail: 2dp keeps SSR and client style strings byte-identical (Date.now() jitter otherwise
   // causes a hydration attribute mismatch). Sub-pixel on a ~400px track.
-  const clampedProgress = Math.round(Math.max(0, Math.min(1, progress)) * 10000) / 100;
+  const clampedProgress = Number.isFinite(progress)
+    ? Math.round(Math.max(0, Math.min(1, progress)) * 10000) / 100
+    : 0;
   // Live time only exists client-side; render neutral values until mounted so the prerendered
   // markup and the first client render agree exactly (no suppressHydrationWarning needed).
   const pct = mounted ? clampedProgress : 0;
@@ -149,12 +154,12 @@ export function TimelineBar({
     return markerTime >= startTime && markerTime <= endTime;
   }).map((m) => ({
     ...m,
-    position: (m.offsetHours * 3600000) / (endTime - startTime),
+    position: span > 0 ? (m.offsetHours * 3600000) / span : 0,
   }));
 
   const cells: Array<{ label: string; value: string }> = [
     { label: 'GEMPA', value: String(metrics.quakes) },
-    { label: 'MAKS M', value: metrics.maxMag.toFixed(1) },
+    { label: 'MAKS M', value: Number.isFinite(metrics.maxMag) ? metrics.maxMag.toFixed(1) : '0.0' },
     { label: 'HOTSPOT', value: String(metrics.hotspots) },
     { label: 'SIKLON', value: String(metrics.cyclones) },
   ];
@@ -166,7 +171,7 @@ export function TimelineBar({
       aria-label="Timeline playback"
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(pct)}
+      aria-valuenow={Number.isFinite(pct) ? Math.round(pct) : 0}
     >
       {/* Row 1 — metric cells, 44px, 1px grid dividers */}
       <div className="flex h-11 items-stretch border-b border-[#1A1A1A]">
