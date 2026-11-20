@@ -5,6 +5,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import maplibregl from 'maplibre-gl';
 import { DisasterFeature, LayerVisibility, MapViewport } from '@/types/disaster';
 import { WindGridData } from '@/lib/normalizers';
+import { clampCallout, type CalloutBox } from '@/lib/callout';
 import { useDeviceCapability } from '@/hooks/useDeviceCapability';
 import { MapBase } from './MapBase';
 import { createAnimatedLayers, createDisasterLayers, createLockOnLayer } from './DisasterLayers';
@@ -238,17 +239,24 @@ export function MapCanvas({
     }
 
     const rect = map.getCanvas().getBoundingClientRect();
-    const W = 200;
-    const H = 36;
-    let left = rect.left + info.x + 12;
-    let top = rect.top + info.y + 12;
-    // Flip to the other side of the cursor rather than clip at the edge.
-    if (left + W > window.innerWidth) left = rect.left + info.x - W - 12;
-    if (top + H > window.innerHeight) top = rect.top + info.y - H - 12;
-    el.style.left = `${Math.max(0, left)}px`;
-    el.style.top = `${Math.max(0, top)}px`;
     el.textContent = calloutText(feature);
     if (el.style.display !== 'block') el.style.display = 'block';
+    const topEl = document.querySelector('[aria-label="Telemetri sistem"]');
+    const bottomEl = document.querySelector('[aria-label="Timeline playback"]');
+    const { left, top } = clampCallout({
+      cursorX: info.x,
+      cursorY: info.y,
+      width: el.offsetWidth,
+      height: el.offsetHeight,
+      viewportW: window.innerWidth,
+      viewportH: window.innerHeight,
+      rectLeft: rect.left,
+      rectTop: rect.top,
+      topStripBottom: topEl?.getBoundingClientRect().bottom ?? null,
+      bottomStripTop: bottomEl?.getBoundingClientRect().top ?? null,
+    });
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
   }, []);
 
   // Handle MapBase events
