@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/icons/icon-192x192.png" width="96" alt="TerraPulse logo" />
+</p>
+
 # TerraPulse
 
 Radar bencana dan cuaca real-time ringan untuk desktop dan mobile (PWA). Peta gelap menampilkan gempa, gunung api, titik panas kebakaran hutan, risiko banjir, dan simulasi tsunami/cyclone dalam satu layar WebGL.
@@ -13,6 +17,16 @@ Fokus utama: responsif di smartphone, tetap ringan di perangkat low-end, dan tid
 - **HUD adaptif** — panel kaca desktop, pill filter + bottom sheet di mobile, scrubbing timeline, dan tombol "Near Me" dengan jarak Haversine.
 - **Throttling otomatis** — partikel dibatasi 1500 di mobile/low-core vs 5000 di desktop, DPR dibatasi maksimal 2.
 - **Tahan gagal** — setiap route API punya fallback; peta tidak pernah crash saat feed eksternal mati. Response selalu menyertakan metadata `source`, `cached`, `stale`, dan `timestamp`.
+
+## Preview
+
+| Desktop (1280×800) | Mobile (390×844) |
+| --- | --- |
+| ![Peta desktop: panel layer kiri, timeline bawah, marker gempa](screenshots/stitch-desktop.png) | ![Peta mobile: pill filter dan bottom sheet](screenshots/stitch-mobile.png) |
+
+<p align="center">
+  <img src="screenshots/stitch-desktop-eventcard.png" width="640" alt="Detail event di dashboard desktop" />
+</p>
 
 ## Stack
 
