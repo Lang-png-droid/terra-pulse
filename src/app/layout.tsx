@@ -23,12 +23,18 @@ export const metadata: Metadata = {
     description: 'Peta interaktif real-time bencana alam',
   },
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
-    apple: '/apple-touch-icon.png',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/favicon.png', sizes: '32x32' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/favicon.png',
+    other: [
+      { rel: 'icon', url: '/favicon.svg', type: 'image/svg+xml', sizes: 'any' },
+    ],
   },
   manifest: '/manifest.json',
-  themeColor: '#09090B',
 };
 
 export const viewport: Viewport = {

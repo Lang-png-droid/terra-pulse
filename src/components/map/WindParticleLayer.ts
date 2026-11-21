@@ -22,6 +22,19 @@ export interface WindParticle {
 }
 
 /**
+ * Cyan to Violet color ramp for wind particles
+ * Low speed = Cyan (#22D3EE), High speed = Violet (#A855F7)
+ */
+const WIND_COLOR_RAMP: Array<[number, number, number]> = [
+  [34, 211, 238],   // #22D3EE - Electric Cyan (calm)
+  [56, 189, 248],   // #38BDF8 - Light Cyan
+  [96, 165, 250],   // #60A5FA - Blue
+  [139, 92, 246],   // #8B5CF6 - Indigo/Violet transition
+  [168, 85, 247],   // #A855F7 - Luminous Violet (strong wind)
+  [192, 38, 211],   // #C026D3 - Deep Violet (storm)
+];
+
+/**
  * Generate wind particle data from wind grid for CPU-based rendering
  */
 export function createWindParticleData(
@@ -31,60 +44,72 @@ export function createWindParticleData(
   particleSize: number = 4,
   speedFactor: number = 1
 ): WindParticle[] {
-  if (!windGrid || !windGrid.uComponent || !windGrid.vComponent) {
-    return [];
-  }
+  if (!windGrid || !windGrid.uComponent || !windGrid.vComponent) return [];
+
+  const { uComponent: u, vComponent: v, lats: lat, lngs: lon, time } = windGrid;
+  const nLat = lat.length;
+  const nLon = lon.length;
+
+  if (nLat === 0 || nLon === 0) return [];
 
   const particles: WindParticle[] = [];
-  const { uComponent, vComponent, lats, lngs } = windGrid;
-  const latCount = lats.length;
-  const lngCount = lngs.length;
+  const timeOffset = (currentTime - time) * speedFactor * 0.001; // seconds
 
-  // Color ramp from blue (slow) to red (fast)
-  const colorRamp: Array<[number, number, number]> = [
-    [0, 100, 255],   // Blue - calm
-    [0, 200, 255],   // Light blue
-    [0, 255, 150],   // Cyan
-    [100, 255, 0],   // Green
-    [255, 200, 0],   // Yellow
-    [255, 100, 0],   // Orange
-    [255, 0, 0],     // Red - fast
-  ];
+  // Calculate grid spacing
+  const latStep = (lat[nLat - 1] - lat[0]) / (nLat - 1);
+  const lonStep = (lon[nLon - 1] - lon[0]) / (nLon - 1);
 
-  // Sample particles from the wind grid
-  const stepLat = Math.max(1, Math.floor(latCount / Math.sqrt(maxParticles)));
-  const stepLng = Math.max(1, Math.floor(lngCount / Math.sqrt(maxParticles)));
+  // Seed random for reproducible distribution
+  let seed = Math.floor(currentTime / 30000) * 1000; // Changes every 30s
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
 
-  for (let i = 0; i < latCount; i += stepLat) {
-    for (let j = 0; j < lngCount; j += stepLng) {
-      if (particles.length >= maxParticles) break;
+  // Generate particles at grid points with some jitter
+  const density = Math.min(maxParticles / (nLat * nLon), 1);
 
-      const u = uComponent[i]?.[j];
-      const v = vComponent[i]?.[j];
+  for (let i = 0; i < nLat; i++) {
+    for (let j = 0; j < nLon; j++) {
+      if (random() > density) continue;
 
-      if (u === undefined || v === undefined || isNaN(u) || isNaN(v)) continue;
+      const uVal = u[i]?.[j];
+      const vVal = v[i]?.[j];
 
-      const speed = Math.sqrt(u * u + v * v);
-      if (speed < 1) continue; // Skip very calm areas
+      if (uVal === undefined || vVal === undefined || uVal === null || vVal === null) continue;
 
-      const lat = lats[i];
-      const lng = lngs[j];
+      // Wind speed in m/s
+      const speed = Math.sqrt(uVal * uVal + vVal * vVal);
+      if (speed < 0.5) continue; // Skip very calm areas
 
-      // Normalize speed to 0-1 for color mapping (max ~30 m/s)
-      const normalizedSpeed = Math.min(speed / 30, 1);
-      const colorIdx = Math.floor(normalizedSpeed * (colorRamp.length - 1));
-      const [r, g, b] = colorRamp[colorIdx];
+      // Add jitter to position for organic feel
+      const jitterLat = (random() - 0.5) * latStep * 0.8;
+      const jitterLon = (random() - 0.5) * lonStep * 0.8;
 
-      // Add some randomness to age for staggered animation
-      const age = Math.random();
+      const particleLat = lat[i] + jitterLat;
+      const particleLon = lon[j] + jitterLon;
+
+      // Calculate velocity (degrees per second)
+      // Approximate: 1 degree lat ≈ 111km, 1 degree lon ≈ 111km * cos(lat)
+      const latRad = (particleLat * Math.PI) / 180;
+      const degPerSecLat = (vVal / 111000) * 3600; // m/s to deg/hour
+      const degPerSecLon = (uVal / (111000 * Math.cos(latRad))) * 3600;
+
+      // Initial age based on position for wave effect
+      const age = random() * 2 * Math.PI;
+
+      // Color based on speed: cyan (low) -> violet (high)
+      const color = interpolateWindColor(speed, 30); // max 30 m/s ≈ 108 km/h
 
       particles.push({
-        position: [lng, lat],
-        velocity: [u * speedFactor, v * speedFactor],
+        position: [particleLon, particleLat],
+        velocity: [degPerSecLon, degPerSecLat],
         speed,
         age,
-        color: [r, g, b, 180],
+        color,
       });
+
+      if (particles.length >= maxParticles) break;
     }
     if (particles.length >= maxParticles) break;
   }
@@ -94,77 +119,78 @@ export function createWindParticleData(
 
 /**
  * Update particle positions based on time (for animation)
- * This can be called in a loop to animate particles
  */
 export function updateWindParticles(
   particles: WindParticle[],
   deltaTime: number,
   bounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number }
 ): WindParticle[] {
+  const hourDelta = deltaTime / 3600; // Convert seconds to hours
+
   return particles.map((p) => {
-    // Move particle based on velocity (simplified - real implementation would use wind field interpolation)
-    const newLng = p.position[0] + p.velocity[0] * deltaTime * 0.0001;
-    const newLat = p.position[1] + p.velocity[1] * deltaTime * 0.0001;
+    let newLng = p.position[0] + p.velocity[0] * hourDelta;
+    let newLat = p.position[1] + p.velocity[1] * hourDelta;
+    const newAge = p.age + deltaTime * 0.5;
 
-    // Wrap around or reset if out of bounds
-    let finalLng = newLng;
-    let finalLat = newLat;
-    let finalAge = p.age + deltaTime * 0.001;
-
+    // Wrap around bounds if provided
     if (bounds) {
-      if (finalLng > bounds.maxLng || finalLng < bounds.minLng ||
-          finalLat > bounds.maxLat || finalLat < bounds.minLat) {
-        // Reset to random position within bounds
-        finalLng = bounds.minLng + Math.random() * (bounds.maxLng - bounds.minLng);
-        finalLat = bounds.minLat + Math.random() * (bounds.maxLat - bounds.minLat);
-        finalAge = 0;
-      }
+      if (newLng > bounds.maxLng) newLng = bounds.minLng;
+      if (newLng < bounds.minLng) newLng = bounds.maxLng;
+      if (newLat > bounds.maxLat) newLat = bounds.minLat;
+      if (newLat < bounds.minLat) newLat = bounds.maxLat;
     }
 
-    if (finalAge > 1) {
-      finalAge = 0;
-      if (bounds) {
-        finalLng = bounds.minLng + Math.random() * (bounds.maxLng - bounds.minLng);
-        finalLat = bounds.minLat + Math.random() * (bounds.maxLat - bounds.minLat);
-      }
-    }
+    // Color shifts slightly with age for shimmer effect
+    const shimmer = Math.sin(newAge) * 15;
+    const color = [
+      Math.min(255, Math.max(0, p.color[0] + shimmer)),
+      Math.min(255, Math.max(0, p.color[1] + shimmer)),
+      Math.min(255, Math.max(0, p.color[2] + shimmer)),
+      p.color[3],
+    ] as [number, number, number, number];
 
     return {
       ...p,
-      position: [finalLng, finalLat],
-      age: finalAge,
-      // Fade out based on age
-      color: [p.color[0], p.color[1], p.color[2], Math.round(180 * (1 - finalAge))],
+      position: [newLng, newLat] as [number, number],
+      age: newAge,
+      color,
     };
   });
 }
 
 /**
- * Interpolate color from color ramp based on speed (0-1)
+ * Interpolate color from cyan-violet ramp based on wind speed (0-30 m/s)
+ * Returns RGBA tuple
  */
 export function interpolateWindColor(speed: number, maxSpeed: number = 30): [number, number, number, number] {
   const normalized = Math.min(speed / maxSpeed, 1);
-  const colorRamp: Array<[number, number, number]> = [
-    [0, 100, 255],
-    [0, 200, 255],
-    [0, 255, 150],
-    [100, 255, 0],
-    [255, 200, 0],
-    [255, 100, 0],
-    [255, 0, 0],
-  ];
-  const idx = normalized * (colorRamp.length - 1);
+  const idx = normalized * (WIND_COLOR_RAMP.length - 1);
   const i = Math.floor(idx);
   const t = idx - i;
-  if (i >= colorRamp.length - 1) {
-    return [...colorRamp[colorRamp.length - 1], 180];
+
+  if (i >= WIND_COLOR_RAMP.length - 1) {
+    return [...WIND_COLOR_RAMP[WIND_COLOR_RAMP.length - 1], 200];
   }
-  const [r1, g1, b1] = colorRamp[i];
-  const [r2, g2, b2] = colorRamp[i + 1];
+
+  const [r1, g1, b1] = WIND_COLOR_RAMP[i];
+  const [r2, g2, b2] = WIND_COLOR_RAMP[i + 1];
+
+  // Alpha varies with speed too - faster = more opaque
+  const alpha = Math.round(120 + 100 * normalized);
+
   return [
     Math.round(r1 + (r2 - r1) * t),
     Math.round(g1 + (g2 - g1) * t),
     Math.round(b1 + (b2 - b1) * t),
-    180,
+    alpha,
   ];
+}
+
+/**
+ * Get color for streamline visualization (static, non-animated)
+ * Used when prefers-reduced-motion is enabled
+ */
+export function getStreamlineColor(speed: number, maxSpeed: number = 30): string {
+  const [r, g, b, a] = interpolateWindColor(speed, maxSpeed);
+  return `rgba(${r}, ${g}, ${b}, ${a / 255})`;
 }
